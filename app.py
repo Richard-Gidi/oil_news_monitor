@@ -6,12 +6,12 @@ from transformers import pipeline
 import numpy as np
 from dotenv import load_dotenv
 import os
-
+from datetime import datetime
 
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")
-
+st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
 # --- Load Environment Variables ---
 load_dotenv()
@@ -31,8 +31,8 @@ def fetch_news():
     data = response.json()
     return data.get("articles", [])
 
-# --- Intelligent Filtering Based on Market Impact ---
-def is_relevant(article):
+# --- Relevance Filter ---
+def is_relevant(article, extra_triggers=[]):
     title = (article.get('title') or '').lower()
     description = (article.get('description') or '').lower()
     content = title + " " + description
@@ -44,12 +44,11 @@ def is_relevant(article):
         "refinery", "demand", "inflation", "recession", "forecast", 
         "inventory", "stockpile", "tariff", "war", "attack", "crude draw",
         "api report", "eia report", "bls data", "interest rate"
-    ]
+    ] + [term.strip() for term in extra_triggers if term.strip()]
 
     return any(trigger in content for trigger in triggers)
 
-
-# --- Cluster News Titles ---
+# --- Cluster Titles ---
 def cluster_titles(titles):
     model = SentenceTransformer('all-MiniLM-L6-v2')
     embeddings = model.encode(titles)
@@ -57,20 +56,22 @@ def cluster_titles(titles):
     clusters = {}
     for i, label in enumerate(clustering.labels_):
         if label == -1:
-            continue  # Noise
+            continue
         clusters.setdefault(label, []).append(i)
-    return clusters
+    return dict(sorted(clusters.items(), key=lambda item: len(item[1]), reverse=True))
 
-# --- Summarize Clusters ---
+# --- Summarize ---
 def summarize_clusters(clusters, articles):
     summaries = {}
     for label, indices in clusters.items():
         text = " ".join([articles[i]['title'] for i in indices])
-        summary = summarizer(text, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
-        summaries[label] = summary
+        if not text.strip():
+            summaries[label] = "No meaningful titles in this cluster."
+        else:
+            summaries[label] = summarizer(text, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
     return summaries
 
-# --- Assess Sentiment & Impact ---
+# --- Sentiment & Impact ---
 def assess_impact(summaries):
     impact_scores = {}
     for label, summary in summaries.items():
@@ -86,7 +87,7 @@ def assess_impact(summaries):
         impact_scores[label] = (label_text, impact)
     return impact_scores
 
-# --- Most Pressing Development ---
+# --- Most Pressing ---
 def get_most_pressing(impacts, summaries):
     worst_label = None
     max_score = -1
@@ -97,7 +98,7 @@ def get_most_pressing(impacts, summaries):
             worst_label = label
     return worst_label, summaries.get(worst_label, ""), max_score
 
-# --- Market Sentiment Score ---
+# --- Market Sentiment ---
 def compute_market_sentiment(impacts):
     score_map = {"POSITIVE": 1, "NEUTRAL": 0, "NEGATIVE": -1}
     scores = [score_map.get(sentiment, 0) for sentiment, _ in impacts.values()]
@@ -109,13 +110,18 @@ def compute_market_sentiment(impacts):
     else:
         return "🟡 Mixed or Neutral Market Sentiment"
 
-# --- Run Pipeline ---
+# --- Sidebar ---
+st.sidebar.header("🔍 Custom Trigger Terms")
+custom_triggers = st.sidebar.text_area(
+    "Enter additional keywords (comma-separated):",
+    "oil, OPEC, conflict, recession"
+).lower().split(",")
+
+# --- Run Analysis ---
 with st.spinner("Fetching and analyzing news..."):
     articles = fetch_news()
-
-    # Apply relevance filter
-    relevant_articles = [article for article in articles if is_relevant(article)]
-    titles = [article['title'] for article in relevant_articles if article['title']]
+    relevant_articles = [a for a in articles if is_relevant(a, custom_triggers)]
+    titles = [a['title'] for a in relevant_articles if a.get('title')]
 
     if titles:
         clusters = cluster_titles(titles)
@@ -132,19 +138,21 @@ with st.spinner("Fetching and analyzing news..."):
 if not titles:
     st.error("No impactful articles found. Try again later or check your API key.")
 else:
-    # Most Pressing Development
+    st.success("✅ News analysis complete.")
+
+    # 🚨 Most Pressing Development
     if pressing_label is not None:
         st.header("🚨 Most Pressing Oil Market Development")
         st.markdown(f"**Summary:** {pressing_summary}")
         st.markdown(f"**Confidence of Impact:** `{pressing_confidence:.2f}`")
         st.markdown("---")
 
-    # Overall Market Sentiment
+    # 📊 Sentiment Summary
     st.header("📊 Oil Market Sentiment")
     st.markdown(f"### {sentiment_summary}")
     st.markdown("---")
 
-    # Clustered Summaries
+    # 🧠 Clustered Summaries
     st.subheader("🗂️ Clustered News Summaries & Impact")
     for label, indices in clusters.items():
         st.markdown(f"### 🧠 Cluster {label}")
@@ -155,3 +163,12 @@ else:
         st.markdown(f"**📈 Sentiment:** `{sentiment}`")
         st.markdown(f"**📊 Estimated Impact on Oil Price:** `{impact}`")
         st.markdown("---")
+
+    # 📄 Raw Article View
+    with st.expander("📄 See All Fetched Articles (Raw Feed)"):
+        for article in articles:
+            st.markdown(f"- [{article.get('title')}]({article.get('url')})")
+
+    # 📥 Download Button
+    report = "\n\n".join([f"Cluster {label}:\nSummary: {summaries[label]}\nImpact: {impacts[label][1]}" for label in summaries])
+    st.download_button("📥 Download Summary Report", report, file_name="oil_news_summary.txt")

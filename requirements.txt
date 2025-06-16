@@ -7,4 +7,5 @@ scikit-learn==1.4.0
 sentence-transformers==2.3.1
 transformers==4.41.0
 torch==2.2.0
-sentencepiece==0.1.99  # 🔧 Add this explicitly (required for sentence-transformers)
+sentencepiece==0.1.99
+python-dotenv==1.0.1 

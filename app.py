@@ -22,7 +22,11 @@ URL = f"https://newsapi.org/v2/everything?q={SEARCH_QUERY}&language=en&sortBy=pu
 # --- Hugging Face Pipelines ---
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn",
                        use_auth_token=os.getenv("HF_TOKEN"))
-sentiment_analyzer = pipeline("sentiment-analysis")
+sentiment_analyzer = pipeline(
+    "sentiment-analysis", 
+    model="distilbert/distilbert-base-uncased-finetuned-sst-2-english"
+)
+
 
 # --- Fetch News ---
 def fetch_news():

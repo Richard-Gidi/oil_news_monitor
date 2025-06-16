@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 import time
 import random
 from datetime import datetime, timedelta
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -16,7 +21,9 @@ headers = {
 def get_articles_oilprice():
     try:
         url = "https://oilprice.com/Latest-Energy-News/World-News/"
+        logger.info(f"Fetching from OilPrice: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"OilPrice response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('div.categoryArticle, article.categoryArticle'):
@@ -31,15 +38,18 @@ def get_articles_oilprice():
                     'url': link,
                     'source': 'OilPrice'
                 })
+        logger.info(f"Found {len(articles)} articles from OilPrice")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching OilPrice: {e}")
+        logger.error(f"Error fetching OilPrice: {str(e)}")
         return []
 
 def get_articles_reuters():
     try:
         url = "https://www.reuters.com/business/energy/"
+        logger.info(f"Fetching from Reuters: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"Reuters response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('div[data-testid="MediaStoryCard"], div[data-testid="StoryCard"]'):
@@ -55,15 +65,18 @@ def get_articles_reuters():
                     'url': article_url,
                     'source': 'Reuters'
                 })
+        logger.info(f"Found {len(articles)} articles from Reuters")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching Reuters: {e}")
+        logger.error(f"Error fetching Reuters: {str(e)}")
         return []
 
 def get_articles_rigzone():
     try:
         url = "https://www.rigzone.com/news/"
+        logger.info(f"Fetching from Rigzone: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"Rigzone response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('div.article-list-item, article.article-list-item'):
@@ -78,15 +91,18 @@ def get_articles_rigzone():
                     'url': link,
                     'source': 'Rigzone'
                 })
+        logger.info(f"Found {len(articles)} articles from Rigzone")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching Rigzone: {e}")
+        logger.error(f"Error fetching Rigzone: {str(e)}")
         return []
 
 def get_articles_platts():
     try:
         url = "https://www.spglobal.com/platts/en/market-insights/latest-news/oil"
+        logger.info(f"Fetching from Platts: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"Platts response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('div.article-card, article.article-card'):
@@ -101,15 +117,18 @@ def get_articles_platts():
                     'url': link,
                     'source': 'S&P Global Platts'
                 })
+        logger.info(f"Found {len(articles)} articles from Platts")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching Platts: {e}")
+        logger.error(f"Error fetching Platts: {str(e)}")
         return []
 
 def get_articles_energy_voice():
     try:
         url = "https://www.energyvoice.com/oilandgas/"
+        logger.info(f"Fetching from Energy Voice: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"Energy Voice response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('article.post'):
@@ -124,15 +143,18 @@ def get_articles_energy_voice():
                     'url': link,
                     'source': 'Energy Voice'
                 })
+        logger.info(f"Found {len(articles)} articles from Energy Voice")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching Energy Voice: {e}")
+        logger.error(f"Error fetching Energy Voice: {str(e)}")
         return []
 
 def get_articles_upstream():
     try:
         url = "https://www.upstreamonline.com/latest-news"
+        logger.info(f"Fetching from Upstream: {url}")
         res = requests.get(url, headers=headers, timeout=15)
+        logger.info(f"Upstream response status: {res.status_code}")
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         for article in soup.select('div.article-item'):
@@ -147,9 +169,10 @@ def get_articles_upstream():
                     'url': link,
                     'source': 'Upstream'
                 })
+        logger.info(f"Found {len(articles)} articles from Upstream")
         return articles[:10] if articles else []
     except Exception as e:
-        print(f"Error fetching Upstream: {e}")
+        logger.error(f"Error fetching Upstream: {str(e)}")
         return []
 
 def fetch_all_articles():
@@ -170,14 +193,14 @@ def fetch_all_articles():
             articles = source_func()
             if articles:  # Only add if we got articles
                 all_articles.extend(articles)
-                print(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
+                logger.info(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
             # Add a small delay between requests to be respectful
             time.sleep(random.uniform(2, 4))
         except Exception as e:
-            print(f"Error in source {source_func.__name__}: {e}")
+            logger.error(f"Error in source {source_func.__name__}: {str(e)}")
             continue
     
-    print(f"Total articles fetched: {len(all_articles)}")
+    logger.info(f"Total articles fetched: {len(all_articles)}")
     # Sort by source and limit to most recent
     return sorted(all_articles, key=lambda x: x['source'])[:30]
 

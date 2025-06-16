@@ -6,6 +6,11 @@ import numpy as np
 from datetime import datetime
 from news_scraper import fetch_all_articles
 from textblob import TextBlob
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
@@ -17,7 +22,9 @@ st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 def load_models():
     try:
         summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+        logger.info("Successfully loaded BART summarizer")
     except Exception as e:
+        logger.warning(f"Could not load BART summarizer: {str(e)}")
         st.warning("Could not load BART summarizer, falling back to TextBlob")
         summarizer = None
     
@@ -26,7 +33,9 @@ def load_models():
             "sentiment-analysis", 
             model="distilbert/distilbert-base-uncased-finetuned-sst-2-english"
         )
+        logger.info("Successfully loaded DistilBERT sentiment analyzer")
     except Exception as e:
+        logger.warning(f"Could not load DistilBERT sentiment analyzer: {str(e)}")
         st.warning("Could not load DistilBERT sentiment analyzer, falling back to TextBlob")
         sentiment_analyzer = None
     
@@ -53,7 +62,13 @@ def is_relevant(article, extra_triggers=[]):
 # --- Cluster Titles ---
 @st.cache_resource
 def load_sentence_transformer():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    try:
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        logger.info("Successfully loaded SentenceTransformer model")
+        return model
+    except Exception as e:
+        logger.error(f"Error loading SentenceTransformer: {str(e)}")
+        raise e
 
 def cluster_titles(titles):
     model = load_sentence_transformer()
@@ -84,6 +99,7 @@ def summarize_clusters(clusters, articles):
                     summary = " ".join([str(s) for s in sentences[:2]])  # Take first two sentences
                 summaries[label] = summary
             except Exception as e:
+                logger.error(f"Error summarizing cluster {label}: {str(e)}")
                 summaries[label] = f"Error summarizing cluster: {str(e)}"
     return summaries
 
@@ -118,6 +134,7 @@ def assess_impact(summaries):
                 impact = f"Medium (confidence {score:.2f})"
             impact_scores[label] = (label_text, impact)
         except Exception as e:
+            logger.error(f"Error assessing impact for cluster {label}: {str(e)}")
             impact_scores[label] = ("NEUTRAL", f"Error assessing impact: {str(e)}")
     return impact_scores
 
@@ -131,7 +148,8 @@ def get_most_pressing(impacts, summaries):
             if sentiment == "NEGATIVE" and score > max_score:
                 max_score = score
                 worst_label = label
-        except:
+        except Exception as e:
+            logger.error(f"Error processing impact for cluster {label}: {str(e)}")
             continue
     return worst_label, summaries.get(worst_label, ""), max_score
 
@@ -159,14 +177,34 @@ custom_triggers = st.sidebar.text_area(
 # --- Run Analysis ---
 with st.spinner("Fetching and analyzing news..."):
     try:
+        logger.info("Starting news fetch")
         articles = fetch_all_articles()
+        logger.info(f"Fetched {len(articles)} total articles")
+        
+        if not articles:
+            st.error("No articles were fetched from any source. Please check your internet connection and try again.")
+            st.stop()
+            
         relevant_articles = [a for a in articles if is_relevant(a, custom_triggers)]
+        logger.info(f"Found {len(relevant_articles)} relevant articles")
+        
+        if not relevant_articles:
+            st.error("No articles matched the relevance criteria. Try adding more keywords in the sidebar.")
+            st.stop()
+            
         titles = [a['title'] for a in relevant_articles if a.get('title')]
+        logger.info(f"Processing {len(titles)} titles")
 
         if titles:
             clusters = cluster_titles(titles)
+            logger.info(f"Created {len(clusters)} clusters")
+            
             summaries = summarize_clusters(clusters, relevant_articles)
+            logger.info("Generated summaries")
+            
             impacts = assess_impact(summaries)
+            logger.info("Assessed impacts")
+            
             pressing_label, pressing_summary, pressing_confidence = get_most_pressing(impacts, summaries)
             sentiment_summary = compute_market_sentiment(impacts)
         else:
@@ -174,6 +212,7 @@ with st.spinner("Fetching and analyzing news..."):
             pressing_label, pressing_summary, pressing_confidence = None, "", 0
             sentiment_summary = ""
     except Exception as e:
+        logger.error(f"An error occurred during analysis: {str(e)}")
         st.error(f"An error occurred during analysis: {str(e)}")
         clusters, summaries, impacts = {}, {}, {}
         pressing_label, pressing_summary, pressing_confidence = None, "", 0

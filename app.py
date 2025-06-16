@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 import os
 
 
-# Inside app.py
-os.system("pip install torch==2.2.0 --extra-index-url https://download.pytorch.org/whl/cpu")
-
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")

@@ -4,13 +4,17 @@ from sentence_transformers import SentenceTransformer
 from sklearn.cluster import DBSCAN
 from transformers import pipeline
 import numpy as np
+from dotenv import load_dotenv
+import os
 
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")
 
-# --- API Configuration ---
-API_KEY = "19ca0f78c0df4530a2719e7aebbf4f04"  # Replace with your valid NewsAPI key
+
+# --- Load Environment Variables ---
+load_dotenv()
+API_KEY = os.getenv("NEWS_API_KEY")
 SEARCH_QUERY = "oil OR crude oil OR OPEC OR war OR tariff"
 URL = f"https://newsapi.org/v2/everything?q={SEARCH_QUERY}&language=en&sortBy=publishedAt&apiKey={API_KEY}"
 

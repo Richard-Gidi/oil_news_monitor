@@ -1,46 +1,27 @@
 import streamlit as st
-import requests
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import DBSCAN
 from transformers import pipeline
 import numpy as np
-from dotenv import load_dotenv
-import os
 from datetime import datetime
+from news_scraper import fetch_all_articles
 
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")
 st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
-# --- Load Environment Variables ---
-load_dotenv()
-API_KEY = os.getenv("NEWS_API_KEY")
-SEARCH_QUERY = "oil OR crude oil OR OPEC OR war OR tariff"
-URL = f"https://newsapi.org/v2/everything?q={SEARCH_QUERY}&language=en&sortBy=publishedAt&apiKey={API_KEY}"
-
 # --- Hugging Face Pipelines ---
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn",
-                       use_auth_token=os.getenv("HF_TOKEN"))
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 sentiment_analyzer = pipeline(
     "sentiment-analysis", 
     model="distilbert/distilbert-base-uncased-finetuned-sst-2-english"
 )
 
-
-# --- Fetch News ---
-def fetch_news():
-    response = requests.get(URL)
-    if response.status_code != 200:
-        return []
-    data = response.json()
-    return data.get("articles", [])
-
 # --- Relevance Filter ---
 def is_relevant(article, extra_triggers=[]):
-    title = (article.get('title') or '').lower()
-    description = (article.get('description') or '').lower()
-    content = title + " " + description
+    title = article.get('title', '').lower()
+    content = title
 
     triggers = [
         "opec", "opec+", "production cut", "supply cut", "output cut",
@@ -124,7 +105,7 @@ custom_triggers = st.sidebar.text_area(
 
 # --- Run Analysis ---
 with st.spinner("Fetching and analyzing news..."):
-    articles = fetch_news()
+    articles = fetch_all_articles()
     relevant_articles = [a for a in articles if is_relevant(a, custom_triggers)]
     titles = [a['title'] for a in relevant_articles if a.get('title')]
 
@@ -141,7 +122,7 @@ with st.spinner("Fetching and analyzing news..."):
 
 # --- Display Results ---
 if not titles:
-    st.error("No impactful articles found. Try again later or check your API key.")
+    st.error("No impactful articles found. Try again later or check your internet connection.")
 else:
     st.success("✅ News analysis complete.")
 
@@ -162,7 +143,8 @@ else:
     for label, indices in clusters.items():
         st.markdown(f"### 🧠 Cluster {label}")
         for i in indices:
-            st.markdown(f"- [{relevant_articles[i]['title']}]({relevant_articles[i]['url']})")
+            article = relevant_articles[i]
+            st.markdown(f"- [{article['title']}]({article['url']}) ({article['source']})")
         st.markdown(f"**📝 Summary:** {summaries[label]}")
         sentiment, impact = impacts[label]
         st.markdown(f"**📈 Sentiment:** `{sentiment}`")
@@ -172,7 +154,7 @@ else:
     # 📄 Raw Article View
     with st.expander("📄 See All Fetched Articles (Raw Feed)"):
         for article in articles:
-            st.markdown(f"- [{article.get('title')}]({article.get('url')})")
+            st.markdown(f"- [{article['title']}]({article['url']}) ({article['source']})")
 
     # 📥 Download Button
     report = "\n\n".join([f"Cluster {label}:\nSummary: {summaries[label]}\nImpact: {impacts[label][1]}" for label in summaries])

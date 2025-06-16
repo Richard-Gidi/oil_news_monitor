@@ -26,7 +26,8 @@ def find_similar_topics(all_articles):
 
 # ----- 4. Summarization -----
 def generate_summary(news_items):
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn",
+                          use_auth_token=os.getenv("HF_TOKEN"))
     combined = " ".join(news_items)
     max_len = 1024
     summary_input = combined[:max_len]

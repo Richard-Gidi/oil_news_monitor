@@ -20,7 +20,8 @@ SEARCH_QUERY = "oil OR crude oil OR OPEC OR war OR tariff"
 URL = f"https://newsapi.org/v2/everything?q={SEARCH_QUERY}&language=en&sortBy=publishedAt&apiKey={API_KEY}"
 
 # --- Hugging Face Pipelines ---
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn",
+                       use_auth_token=os.getenv("HF_TOKEN"))
 sentiment_analyzer = pipeline("sentiment-analysis")
 
 # --- Fetch News ---

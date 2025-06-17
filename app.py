@@ -39,7 +39,7 @@ st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
 # Debug section at the top
 st.sidebar.header("🔧 Debug Information")
-if st.sidebar.button("Test News Fetch"):
+if st.sidebar.button("Test News Fetch", key="test_news_fetch"):
     with st.spinner("Testing news fetch..."):
         articles = fetch_all_articles()
         st.sidebar.write(f"Total articles fetched: {len(articles)}")
@@ -361,7 +361,7 @@ def main():
     # Debug section in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("Debug")
-    if st.sidebar.button("Test News Fetch"):
+    if st.sidebar.button("Test News Fetch", key="test_news_fetch"):
         try:
             articles = fetch_all_articles()
             st.sidebar.write(f"Total articles fetched: {len(articles)}")
@@ -402,13 +402,13 @@ def main():
                 st.warning("No articles found. Please check the debug section for more information.")
             else:
                 # Debug expander
-                with st.expander("Debug: Raw Articles"):
+                with st.expander("Debug: Raw Articles", expanded=False):
                     st.write(f"Total articles fetched: {len(articles)}")
                     for article in articles:
                         st.write(f"- {article['title']} ({article['source']})")
                 
                 # Process articles
-                for article in articles:
+                for i, article in enumerate(articles):
                     with st.container():
                         st.markdown(f"### {article['title']}")
                         st.markdown(f"Source: {article['source']}")

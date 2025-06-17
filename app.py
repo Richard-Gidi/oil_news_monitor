@@ -60,11 +60,31 @@ def get_oil_price_data():
         logger.error(f"Error fetching oil price data: {str(e)}")
         return pd.DataFrame()
 
+def filter_articles_by_keywords(articles, keywords):
+    """Filter articles based on keywords"""
+    if not keywords:
+        return articles
+        
+    filtered_articles = []
+    for article in articles:
+        title = article['title'].lower()
+        if any(keyword.lower() in title for keyword in keywords):
+            filtered_articles.append(article)
+    return filtered_articles
+
 def main():
     st.title("Oil News Monitor")
     
     # Sidebar
     st.sidebar.title("Settings")
+    
+    # Keyword filter in sidebar
+    st.sidebar.subheader("Keyword Filter")
+    keywords_input = st.sidebar.text_input(
+        "Enter keywords (comma-separated):",
+        "oil, OPEC, crude, price"
+    )
+    keywords = [k.strip() for k in keywords_input.split(',') if k.strip()]
     
     # Debug section in sidebar
     st.sidebar.markdown("---")
@@ -109,25 +129,32 @@ def main():
             if not articles:
                 st.warning("No articles found. Please check the debug section for more information.")
             else:
+                # Filter articles by keywords
+                filtered_articles = filter_articles_by_keywords(articles, keywords)
+                
                 # Debug expander
                 with st.expander("Debug: Raw Articles", expanded=False):
                     st.write(f"Total articles fetched: {len(articles)}")
+                    st.write(f"Articles matching keywords: {len(filtered_articles)}")
                     for article in articles:
                         st.write(f"- {article['title']} ({article['source']})")
                 
-                # Process articles
-                for i, article in enumerate(articles):
-                    with st.container():
-                        st.markdown(f"### {article['title']}")
-                        st.markdown(f"Source: {article['source']}")
-                        st.markdown(f"[Read more]({article['url']})")
-                        
-                        # Analyze sentiment
-                        sentiment = analyze_sentiment(article['title'])
-                        sentiment_color = 'green' if sentiment > 0.6 else 'red' if sentiment < 0.4 else 'gray'
-                        st.markdown(f"Sentiment: :{sentiment_color}[{sentiment:.2f}]")
-                        
-                        st.markdown("---")
+                # Process filtered articles
+                if not filtered_articles:
+                    st.info(f"No articles found matching the keywords: {', '.join(keywords)}")
+                else:
+                    for i, article in enumerate(filtered_articles):
+                        with st.container():
+                            st.markdown(f"### {article['title']}")
+                            st.markdown(f"Source: {article['source']}")
+                            st.markdown(f"[Read more]({article['url']})")
+                            
+                            # Analyze sentiment
+                            sentiment = analyze_sentiment(article['title'])
+                            sentiment_color = 'green' if sentiment > 0.6 else 'red' if sentiment < 0.4 else 'gray'
+                            st.markdown(f"Sentiment: :{sentiment_color}[{sentiment:.2f}]")
+                            
+                            st.markdown("---")
         except Exception as e:
             st.error(f"Error processing news: {str(e)}")
             logger.error(f"Error in main news processing: {str(e)}")

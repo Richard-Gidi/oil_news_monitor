@@ -121,50 +121,116 @@ def get_articles_oilprice():
             logger.error("Failed to get response from OilPrice")
             return []
             
+        # Log the response status and content length
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response content length: {len(response.text)}")
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        # Find all article containers
-        article_containers = soup.find_all('div', class_='categoryArticle')
-        logger.info(f"Found {len(article_containers)} article containers")
+        # Log the page title to verify we got the right page
+        page_title = soup.find('title')
+        logger.info(f"Page title: {page_title.text if page_title else 'No title found'}")
+        
+        # Try different selectors for article containers
+        selectors = [
+            'div.categoryArticle',
+            'article.categoryArticle',
+            'div.article-list-item',
+            'div.article-item',
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper',
+            'div.article-list',
+            'div.article-list-wrapper'
+        ]
+        
+        for selector in selectors:
+            logger.info(f"Trying selector: {selector}")
+            elements = soup.select(selector)
+            logger.info(f"Found {len(elements)} elements with selector {selector}")
+            
+            if elements:
+                # Log the first element's HTML for debugging
+                logger.info(f"First element HTML: {elements[0].prettify()}")
+        
+        # Find all article containers using multiple approaches
+        article_containers = []
+        
+        # Try finding by class
+        article_containers.extend(soup.find_all('div', class_='categoryArticle'))
+        logger.info(f"Found {len(article_containers)} articles by class 'categoryArticle'")
+        
+        # Try finding by article tag
+        article_containers.extend(soup.find_all('article'))
+        logger.info(f"Found {len(article_containers)} articles by 'article' tag")
+        
+        # Try finding by specific structure
+        article_containers.extend(soup.find_all('div', class_='article-list-item'))
+        logger.info(f"Found {len(article_containers)} articles by 'article-list-item' class")
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        article_containers = [x for x in article_containers if not (x in seen or seen.add(x))]
+        logger.info(f"Total unique article containers found: {len(article_containers)}")
         
         for article in article_containers:
             try:
-                # Get title and link
-                title_elem = article.find('h2')
-                if not title_elem:
-                    continue
-                    
-                title_text = title_elem.text.strip()
-                if not title_text:
+                # Log the article HTML for debugging
+                logger.info(f"Processing article HTML: {article.prettify()}")
+                
+                # Try multiple title selectors
+                title_selectors = ['h2', 'h3', 'a.title', 'a.headline', 'div.title']
+                title_text = None
+                link = None
+                
+                for selector in title_selectors:
+                    title_elem = article.select_one(selector)
+                    if title_elem:
+                        title_text = title_elem.text.strip()
+                        if title_text:
+                            # Try to get link from title element or its parent
+                            link_elem = title_elem.find('a') or title_elem.parent.find('a')
+                            if link_elem and 'href' in link_elem.attrs:
+                                link = link_elem['href']
+                                break
+                
+                if not title_text or not link:
+                    logger.info("Skipping article - no title or link found")
                     continue
                 
-                # Get link
-                link = title_elem.find('a')['href'] if title_elem.find('a') else None
-                if not link:
-                    continue
-                    
                 if not link.startswith('http'):
                     link = urljoin('https://oilprice.com', link)
+                
+                logger.info(f"Found article - Title: {title_text}, Link: {link}")
                 
                 # Get date from the article page
                 article_response = safe_request(link)
                 if article_response:
                     article_soup = BeautifulSoup(article_response.text, 'html.parser')
                     
-                    # Try to find the date in the article page
-                    date_elem = article_soup.find('div', class_='article_byline')
-                    date_str = None
+                    # Try multiple date selectors
+                    date_selectors = [
+                        'div.article_byline',
+                        'div.article-meta',
+                        'div.article-meta-info',
+                        'span.date',
+                        'time'
+                    ]
                     
-                    if date_elem:
-                        full_text = date_elem.text.strip()
-                        logger.info(f"Found article byline: {full_text}")
-                        
-                        # Extract date using regex
-                        date_match = re.search(r'By.*?-\s*(.*?)(?:\s*$|\s*\|)', full_text)
-                        if date_match:
-                            date_str = date_match.group(1).strip()
-                            logger.info(f"Extracted date string: {date_str}")
+                    date_str = None
+                    for selector in date_selectors:
+                        date_elem = article_soup.select_one(selector)
+                        if date_elem:
+                            full_text = date_elem.text.strip()
+                            logger.info(f"Found date element text: {full_text}")
+                            
+                            # Extract date using regex
+                            date_match = re.search(r'By.*?-\s*(.*?)(?:\s*$|\s*\|)', full_text)
+                            if date_match:
+                                date_str = date_match.group(1).strip()
+                                logger.info(f"Extracted date string: {date_str}")
+                                break
                 
                 # Parse the date
                 date = None

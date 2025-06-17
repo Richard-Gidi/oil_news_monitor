@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import logging
 from urllib.parse import urljoin
 import json
+import feedparser
 
 # Set up logging
 logging.basicConfig(
@@ -106,249 +107,109 @@ def get_articles_oilprice():
         return []
 
 def get_articles_rigzone():
-    """Fetch articles from Rigzone.com"""
+    """Fetch articles from Rigzone.com using RSS feed"""
     try:
-        url = "https://www.rigzone.com/news/"
-        logger.info(f"Starting to fetch from Rigzone: {url}")
+        url = "https://www.rigzone.com/news/rss/"
+        logger.info(f"Starting to fetch from Rigzone RSS: {url}")
         
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Rigzone")
-            return []
-            
-        soup = BeautifulSoup(res.text, 'html.parser')
+        feed = feedparser.parse(url)
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'div.article-list-item',
-            'article.article-list-item',
-            'div.article-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper',
-            'div.article-list'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
+        for entry in feed.entries[:10]:
+            title = entry.title
+            link = entry.link
             
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = ['h3 a', 'h2 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.rigzone.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Rigzone'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
+            if title and link:
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Rigzone'
+                })
+                logger.info(f"Found article: {title}")
         
         logger.info(f"Total articles found from Rigzone: {len(articles)}")
-        return articles[:10] if articles else []
+        return articles
     except Exception as e:
         logger.error(f"Error fetching Rigzone: {str(e)}")
         return []
 
 def get_articles_energy_voice():
-    """Fetch articles from EnergyVoice.com"""
+    """Fetch articles from EnergyVoice.com using RSS feed"""
     try:
-        url = "https://www.energyvoice.com/oilandgas/"
-        logger.info(f"Starting to fetch from Energy Voice: {url}")
+        url = "https://www.energyvoice.com/feed/"
+        logger.info(f"Starting to fetch from Energy Voice RSS: {url}")
         
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Energy Voice")
-            return []
-            
-        soup = BeautifulSoup(res.text, 'html.parser')
+        feed = feedparser.parse(url)
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'article.post',
-            'div.article-item',
-            'div.post-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper',
-            'div.post-list'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
+        for entry in feed.entries[:10]:
+            title = entry.title
+            link = entry.link
             
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.energyvoice.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Energy Voice'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
+            if title and link:
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Energy Voice'
+                })
+                logger.info(f"Found article: {title}")
         
         logger.info(f"Total articles found from Energy Voice: {len(articles)}")
-        return articles[:10] if articles else []
+        return articles
     except Exception as e:
         logger.error(f"Error fetching Energy Voice: {str(e)}")
         return []
 
 def get_articles_offshore_energy():
-    """Fetch articles from Offshore-Energy.biz"""
+    """Fetch articles from Offshore-Energy.biz using RSS feed"""
     try:
-        url = "https://www.offshore-energy.biz/news/"
-        logger.info(f"Starting to fetch from Offshore Energy: {url}")
+        url = "https://www.offshore-energy.biz/feed/"
+        logger.info(f"Starting to fetch from Offshore Energy RSS: {url}")
         
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Offshore Energy")
-            return []
-            
-        soup = BeautifulSoup(res.text, 'html.parser')
+        feed = feedparser.parse(url)
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'article.post',
-            'div.post-item',
-            'div.article-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper',
-            'div.post-list'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
+        for entry in feed.entries[:10]:
+            title = entry.title
+            link = entry.link
             
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.offshore-energy.biz', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Offshore Energy'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
+            if title and link:
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Offshore Energy'
+                })
+                logger.info(f"Found article: {title}")
         
         logger.info(f"Total articles found from Offshore Energy: {len(articles)}")
-        return articles[:10] if articles else []
+        return articles
     except Exception as e:
         logger.error(f"Error fetching Offshore Energy: {str(e)}")
         return []
 
 def get_articles_upstream():
-    """Fetch articles from Upstream"""
+    """Fetch articles from Upstream using RSS feed"""
     try:
-        url = "https://www.upstreamonline.com/latest-news"
-        logger.info(f"Starting to fetch from Upstream: {url}")
+        url = "https://www.upstreamonline.com/feed/"
+        logger.info(f"Starting to fetch from Upstream RSS: {url}")
         
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Upstream")
-            return []
-            
-        soup = BeautifulSoup(res.text, 'html.parser')
+        feed = feedparser.parse(url)
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'div.article-item',
-            'article.article-item',
-            'div.news-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper',
-            'div.news-list'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
+        for entry in feed.entries[:10]:
+            title = entry.title
+            link = entry.link
             
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = ['h3 a', 'h2 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.upstreamonline.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Upstream'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
+            if title and link:
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Upstream'
+                })
+                logger.info(f"Found article: {title}")
         
         logger.info(f"Total articles found from Upstream: {len(articles)}")
-        return articles[:10] if articles else []
+        return articles
     except Exception as e:
         logger.error(f"Error fetching Upstream: {str(e)}")
         return []

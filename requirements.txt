@@ -6,3 +6,4 @@ requests==2.31.0
 textblob==0.17.1
 nltk==3.8.1
 numpy==1.26.3
+feedparser==6.0.10

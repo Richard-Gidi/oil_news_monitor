@@ -7,3 +7,4 @@ textblob==0.17.1
 nltk==3.8.1
 numpy==1.26.3
 feedparser==6.0.10
+yfinance==0.2.36

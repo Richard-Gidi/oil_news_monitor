@@ -178,11 +178,11 @@ def analyze_economic_impact(text):
     """Analyze the economic impact and transmission mechanism of news"""
     try:
         if not text or not isinstance(text, str):
-            return "No clear economic impact", "Neutral"
+            return "No clear economic impact", "Neutral", "Neutral"
             
         text = text.lower().strip()
         if not text:
-            return "No clear economic impact", "Neutral"
+            return "No clear economic impact", "Neutral", "Neutral"
 
         # Define economic impact categories and their keywords
         impact_categories = {
@@ -235,7 +235,7 @@ def analyze_economic_impact(text):
                 }
 
         if not category_matches:
-            return "No clear economic impact", "Neutral"
+            return "No clear economic impact", "Neutral", "Neutral"
 
         # Determine primary impact
         primary_category = max(category_matches.items(), key=lambda x: len(x[1]['matches']))
@@ -245,11 +245,11 @@ def analyze_economic_impact(text):
         # Calculate intensity based on number of matching keywords
         intensity = "Strong" if len(primary_category[1]['matches']) > 2 else "Moderate" if len(primary_category[1]['matches']) > 1 else "Weak"
 
-        return f"{mechanism}", f"{impact} - {intensity}"
+        return mechanism, impact, intensity
 
     except Exception as e:
         logger.error(f"Error in economic impact analysis: {str(e)}")
-        return "Error in analysis", "Neutral"
+        return "Error in analysis", "Neutral", "Neutral"
 
 def main():
     st.title("Oil News Monitor")
@@ -313,12 +313,12 @@ def main():
                             st.markdown(f"[Read more]({article['url']})")
                             
                             # Economic Impact Analysis
-                            mechanism, impact = analyze_economic_impact(article['title'])
-                            sentiment_color = get_sentiment_color(impact.split(' - ')[0], impact.split(' - ')[1])
+                            mechanism, impact, intensity = analyze_economic_impact(article['title'])
+                            sentiment_color = get_sentiment_color(impact, intensity)
                             
                             st.markdown("#### Economic Analysis")
                             st.markdown(f"**Transmission Mechanism:** {mechanism}")
-                            st.markdown(f"**Market Impact:** :{sentiment_color}[{impact}]")
+                            st.markdown(f"**Market Impact:** :{sentiment_color}[{impact} - {intensity}]")
                             
                             st.markdown("---")
         except Exception as e:

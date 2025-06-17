@@ -5,6 +5,7 @@ import random
 from datetime import datetime, timedelta
 import logging
 from urllib.parse import urljoin
+import json
 
 # Set up logging
 logging.basicConfig(
@@ -30,10 +31,30 @@ def safe_request(url, timeout=30, max_retries=3):
     for attempt in range(max_retries):
         try:
             logger.info(f"Attempting request to {url} (attempt {attempt + 1}/{max_retries})")
-            response = requests.get(url, headers=headers, timeout=timeout)
-            response.raise_for_status()
-            logger.info(f"Successfully fetched {url}")
-            return response
+            
+            # Try direct request first
+            try:
+                response = requests.get(url, headers=headers, timeout=timeout)
+                response.raise_for_status()
+                logger.info(f"Successfully fetched {url} directly")
+                return response
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Direct request failed: {str(e)}")
+                
+                # If direct request fails, try with a proxy
+                try:
+                    proxies = {
+                        'http': 'http://proxy.example.com:8080',  # Replace with actual proxy
+                        'https': 'http://proxy.example.com:8080'
+                    }
+                    response = requests.get(url, headers=headers, proxies=proxies, timeout=timeout)
+                    response.raise_for_status()
+                    logger.info(f"Successfully fetched {url} via proxy")
+                    return response
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"Proxy request failed: {str(e)}")
+                    raise
+                
         except requests.exceptions.RequestException as e:
             logger.warning(f"Attempt {attempt + 1} failed for {url}: {str(e)}")
             if attempt == max_retries - 1:
@@ -53,6 +74,11 @@ def get_articles_oilprice():
             logger.error("Failed to get response from OilPrice")
             return []
             
+        # Save the HTML for debugging
+        with open('oilprice_debug.html', 'w', encoding='utf-8') as f:
+            f.write(res.text)
+        logger.info("Saved OilPrice HTML for debugging")
+            
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
@@ -62,7 +88,9 @@ def get_articles_oilprice():
             'article.categoryArticle',
             'div.article-list-item',
             'div.article-item',
-            'div.article'
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper'
         ]
         
         for selector in selectors:
@@ -71,18 +99,30 @@ def get_articles_oilprice():
             logger.info(f"Found {len(elements)} elements with selector {selector}")
             
             for article in elements:
-                title = article.select_one('h2 a, h3 a, a.title, a.headline')
-                if title:
-                    title_text = title.text.strip()
-                    link = title.get('href', '')
-                    if not link.startswith('http'):
-                        link = urljoin('https://oilprice.com', link)
-                    articles.append({
-                        'title': title_text,
-                        'url': link,
-                        'source': 'OilPrice'
-                    })
-                    logger.info(f"Found article: {title_text}")
+                # Try multiple title selectors
+                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://oilprice.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'OilPrice'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
         
         logger.info(f"Total articles found from OilPrice: {len(articles)}")
         return articles[:10] if articles else []
@@ -101,6 +141,11 @@ def get_articles_rigzone():
             logger.error("Failed to get response from Rigzone")
             return []
             
+        # Save the HTML for debugging
+        with open('rigzone_debug.html', 'w', encoding='utf-8') as f:
+            f.write(res.text)
+        logger.info("Saved Rigzone HTML for debugging")
+            
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
@@ -109,7 +154,9 @@ def get_articles_rigzone():
             'div.article-list-item',
             'article.article-list-item',
             'div.article-item',
-            'div.article'
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper'
         ]
         
         for selector in selectors:
@@ -118,18 +165,30 @@ def get_articles_rigzone():
             logger.info(f"Found {len(elements)} elements with selector {selector}")
             
             for article in elements:
-                title = article.select_one('h3 a, h2 a, a.title, a.headline')
-                if title:
-                    title_text = title.text.strip()
-                    link = title.get('href', '')
-                    if not link.startswith('http'):
-                        link = urljoin('https://www.rigzone.com', link)
-                    articles.append({
-                        'title': title_text,
-                        'url': link,
-                        'source': 'Rigzone'
-                    })
-                    logger.info(f"Found article: {title_text}")
+                # Try multiple title selectors
+                title_selectors = ['h3 a', 'h2 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.rigzone.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Rigzone'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
         
         logger.info(f"Total articles found from Rigzone: {len(articles)}")
         return articles[:10] if articles else []
@@ -148,6 +207,11 @@ def get_articles_energy_voice():
             logger.error("Failed to get response from Energy Voice")
             return []
             
+        # Save the HTML for debugging
+        with open('energyvoice_debug.html', 'w', encoding='utf-8') as f:
+            f.write(res.text)
+        logger.info("Saved Energy Voice HTML for debugging")
+            
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
@@ -156,7 +220,9 @@ def get_articles_energy_voice():
             'article.post',
             'div.article-item',
             'div.post-item',
-            'div.article'
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper'
         ]
         
         for selector in selectors:
@@ -165,18 +231,30 @@ def get_articles_energy_voice():
             logger.info(f"Found {len(elements)} elements with selector {selector}")
             
             for article in elements:
-                title = article.select_one('h2 a, h3 a, a.title, a.headline')
-                if title:
-                    title_text = title.text.strip()
-                    link = title.get('href', '')
-                    if not link.startswith('http'):
-                        link = urljoin('https://www.energyvoice.com', link)
-                    articles.append({
-                        'title': title_text,
-                        'url': link,
-                        'source': 'Energy Voice'
-                    })
-                    logger.info(f"Found article: {title_text}")
+                # Try multiple title selectors
+                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.energyvoice.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Energy Voice'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
         
         logger.info(f"Total articles found from Energy Voice: {len(articles)}")
         return articles[:10] if articles else []

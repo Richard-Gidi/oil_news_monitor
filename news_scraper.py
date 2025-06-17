@@ -7,6 +7,7 @@ import logging
 from urllib.parse import urljoin
 import json
 import feedparser
+import re
 
 # Set up logging
 logging.basicConfig(
@@ -167,26 +168,62 @@ def get_articles_oilprice():
                                 'div.date',
                                 'div.timestamp',
                                 'div.article_byline',
-                                'div.article-meta'
+                                'div.article-meta',
+                                'div.article-meta-info'
                             ]
+                            
+                            # Log the raw HTML of the article for debugging
+                            logger.info(f"Raw article HTML: {article.prettify()}")
                             
                             date_str = None
                             for date_selector in date_selectors:
                                 date_elem = article.select_one(date_selector)
                                 if date_elem:
+                                    # Log the raw HTML of the date element
+                                    logger.info(f"Found date element with selector {date_selector}: {date_elem.prettify()}")
+                                    
                                     # Get the full text which includes the date
                                     full_text = date_elem.get_text(strip=True)
+                                    logger.info(f"Full text from date element: {full_text}")
+                                    
                                     # Look for the date pattern in the text
-                                    if 'By' in full_text and any(month in full_text for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']):
+                                    if 'By' in full_text:
                                         # Extract the date part after "By"
                                         date_parts = full_text.split('By')[1].strip()
+                                        logger.info(f"Text after 'By': {date_parts}")
+                                        
                                         if '-' in date_parts:
                                             date_parts = date_parts.split('-')[1].strip()
-                                        date_str = date_parts
-                                        break
+                                            logger.info(f"Text after '-': {date_parts}")
+                                        
+                                        # Try to extract just the date part
+                                        date_match = re.search(r'([A-Za-z]+ \d+, \d{4})', date_parts)
+                                        if date_match:
+                                            date_str = date_match.group(1)
+                                            logger.info(f"Extracted date string: {date_str}")
+                                            break
+                                        else:
+                                            date_str = date_parts
+                                            logger.info(f"Using full date parts: {date_str}")
+                                            break
                             
-                            date = parse_date(date_str, 'OilPrice')
-                            logger.info(f"Parsed date string '{date_str}' to {date}")
+                            if date_str:
+                                # Try to parse the date
+                                try:
+                                    # First try the full format with time
+                                    date = datetime.strptime(date_str, '%b %d, %Y')
+                                    logger.info(f"Successfully parsed date: {date}")
+                                except ValueError:
+                                    try:
+                                        # Try without time
+                                        date = datetime.strptime(date_str, '%B %d, %Y')
+                                        logger.info(f"Successfully parsed date with full month: {date}")
+                                    except ValueError:
+                                        logger.error(f"Failed to parse date string: {date_str}")
+                                        date = None
+                            else:
+                                date = None
+                                logger.error("No date string found")
                             
                             articles.append({
                                 'title': title_text,
@@ -194,7 +231,7 @@ def get_articles_oilprice():
                                 'source': 'OilPrice',
                                 'date': date
                             })
-                            logger.info(f"Found article: {title_text} with date: {date}")
+                            logger.info(f"Added article: {title_text} with date: {date}")
                             break
                 except Exception as e:
                     logger.error(f"Error parsing OilPrice article: {str(e)}")

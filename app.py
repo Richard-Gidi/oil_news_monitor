@@ -174,6 +174,83 @@ def summarize_articles(articles):
     
     return full_summary
 
+def analyze_economic_impact(text):
+    """Analyze the economic impact and transmission mechanism of news"""
+    try:
+        if not text or not isinstance(text, str):
+            return "No clear economic impact", "Neutral"
+            
+        text = text.lower().strip()
+        if not text:
+            return "No clear economic impact", "Neutral"
+
+        # Define economic impact categories and their keywords
+        impact_categories = {
+            'supply_shock': {
+                'keywords': ['production cut', 'output reduction', 'supply disruption', 'pipeline attack', 
+                           'refinery fire', 'facility damage', 'production halt', 'export ban', 'sanctions'],
+                'impact': 'Bearish',
+                'mechanism': 'Direct supply reduction leading to higher prices'
+            },
+            'demand_shock': {
+                'keywords': ['economic slowdown', 'recession', 'demand drop', 'consumption fall', 
+                           'industrial slowdown', 'manufacturing decline', 'economic crisis'],
+                'impact': 'Bearish',
+                'mechanism': 'Reduced demand leading to lower prices'
+            },
+            'geopolitical_risk': {
+                'keywords': ['war', 'conflict', 'tension', 'attack', 'military', 'sanctions', 
+                           'diplomatic', 'protest', 'unrest', 'strike'],
+                'impact': 'Bullish',
+                'mechanism': 'Supply disruption risk leading to price volatility'
+            },
+            'inventory_change': {
+                'keywords': ['inventory', 'stockpile', 'storage', 'reserve', 'drawdown', 'build'],
+                'impact': 'Mixed',
+                'mechanism': 'Supply-demand balance indicator'
+            },
+            'monetary_policy': {
+                'keywords': ['interest rate', 'fed', 'central bank', 'inflation', 'monetary policy', 
+                           'quantitative easing', 'tapering'],
+                'impact': 'Mixed',
+                'mechanism': 'Currency and economic growth effects'
+            },
+            'infrastructure': {
+                'keywords': ['pipeline', 'refinery', 'terminal', 'storage', 'capacity', 'expansion', 
+                           'maintenance', 'upgrade'],
+                'impact': 'Mixed',
+                'mechanism': 'Supply chain and logistics impact'
+            }
+        }
+
+        # Analyze text for each category
+        category_matches = {}
+        for category, data in impact_categories.items():
+            matches = [keyword for keyword in data['keywords'] if keyword in text]
+            if matches:
+                category_matches[category] = {
+                    'matches': matches,
+                    'impact': data['impact'],
+                    'mechanism': data['mechanism']
+                }
+
+        if not category_matches:
+            return "No clear economic impact", "Neutral"
+
+        # Determine primary impact
+        primary_category = max(category_matches.items(), key=lambda x: len(x[1]['matches']))
+        impact = primary_category[1]['impact']
+        mechanism = primary_category[1]['mechanism']
+
+        # Calculate intensity based on number of matching keywords
+        intensity = "Strong" if len(primary_category[1]['matches']) > 2 else "Moderate" if len(primary_category[1]['matches']) > 1 else "Weak"
+
+        return f"{mechanism}", f"{impact} - {intensity}"
+
+    except Exception as e:
+        logger.error(f"Error in economic impact analysis: {str(e)}")
+        return "Error in analysis", "Neutral"
+
 def main():
     st.title("Oil News Monitor")
     st.sidebar.title("Settings")
@@ -234,9 +311,15 @@ def main():
                             st.markdown(f"### {article['title']}")
                             st.markdown(f"Source: {article['source']}")
                             st.markdown(f"[Read more]({article['url']})")
-                            sentiment, intensity = analyze_sentiment(article['title'])
-                            sentiment_color = get_sentiment_color(sentiment, intensity)
-                            st.markdown(f"Market Sentiment: :{sentiment_color}[{sentiment} - {intensity}]")
+                            
+                            # Economic Impact Analysis
+                            mechanism, impact = analyze_economic_impact(article['title'])
+                            sentiment_color = get_sentiment_color(impact.split(' - ')[0], impact.split(' - ')[1])
+                            
+                            st.markdown("#### Economic Analysis")
+                            st.markdown(f"**Transmission Mechanism:** {mechanism}")
+                            st.markdown(f"**Market Impact:** :{sentiment_color}[{impact}]")
+                            
                             st.markdown("---")
         except Exception as e:
             st.error(f"Error processing news: {str(e)}")

@@ -10,36 +10,57 @@ import feedparser
 import re
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def safe_request(url, max_retries=3):
+# Create a session for persistent cookies and headers
+session = requests.Session()
+
+# Set up headers to mimic a browser
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0'
+}
+
+def safe_request(url, max_retries=3, delay=2):
     """Make a request with retries and proper headers"""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
-    
     for attempt in range(max_retries):
         try:
-            logger.info(f"Attempting to fetch {url} (attempt {attempt + 1}/{max_retries})")
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            logger.info(f"Successfully fetched {url}")
-            return response
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching {url} (attempt {attempt + 1}/{max_retries}): {str(e)}")
-            if attempt < max_retries - 1:
-                time.sleep(2 * (attempt + 1))  # Exponential backoff
+            logger.info(f"Making request to {url} (attempt {attempt + 1}/{max_retries})")
+            
+            # Add a small random delay
+            time.sleep(delay + random.random())
+            
+            # Make the request with our session and headers
+            response = session.get(url, headers=headers, timeout=10)
+            
+            # Log response details
+            logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
+            
+            if response.status_code == 200:
+                return response
             else:
-                logger.error(f"Failed to fetch {url} after {max_retries} attempts")
-                return None
+                logger.error(f"Request failed with status code: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"Request failed: {str(e)}")
+            
+        if attempt < max_retries - 1:
+            wait_time = delay * (attempt + 1)
+            logger.info(f"Waiting {wait_time} seconds before retry...")
+            time.sleep(wait_time)
+    
+    return None
 
 def parse_date(date_str, source):
     """Parse date string based on source format"""
@@ -125,6 +146,11 @@ def get_articles_oilprice():
         logger.info(f"Response status: {response.status_code}")
         logger.info(f"Response content length: {len(response.text)}")
         
+        # Save the HTML content for debugging
+        with open('oilprice_debug.html', 'w', encoding='utf-8') as f:
+            f.write(response.text)
+        logger.info("Saved HTML content to oilprice_debug.html")
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
@@ -132,42 +158,39 @@ def get_articles_oilprice():
         page_title = soup.find('title')
         logger.info(f"Page title: {page_title.text if page_title else 'No title found'}")
         
-        # Try different selectors for article containers
-        selectors = [
-            'div.categoryArticle',
-            'article.categoryArticle',
-            'div.article-list-item',
-            'div.article-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper',
-            'div.article-list',
-            'div.article-list-wrapper'
-        ]
+        # Try to find the main content area
+        main_content = soup.find('div', class_='categoryArticleList')
+        if main_content:
+            logger.info("Found main content area")
+            article_containers = main_content.find_all('div', class_='categoryArticle')
+            logger.info(f"Found {len(article_containers)} article containers in main content")
+        else:
+            logger.info("Main content area not found, trying alternative selectors")
+            article_containers = []
         
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
+        # If no articles found in main content, try alternative selectors
+        if not article_containers:
+            selectors = [
+                'div.categoryArticle',
+                'article.categoryArticle',
+                'div.article-list-item',
+                'div.article-item',
+                'div.article',
+                'div.article-content',
+                'div.article-wrapper',
+                'div.article-list',
+                'div.article-list-wrapper'
+            ]
             
-            if elements:
-                # Log the first element's HTML for debugging
-                logger.info(f"First element HTML: {elements[0].prettify()}")
-        
-        # Find all article containers using multiple approaches
-        article_containers = []
-        
-        # Try finding by class
-        article_containers.extend(soup.find_all('div', class_='categoryArticle'))
-        logger.info(f"Found {len(article_containers)} articles by class 'categoryArticle'")
-        
-        # Try finding by article tag
-        article_containers.extend(soup.find_all('article'))
-        logger.info(f"Found {len(article_containers)} articles by 'article' tag")
-        
-        # Try finding by specific structure
-        article_containers.extend(soup.find_all('div', class_='article-list-item'))
-        logger.info(f"Found {len(article_containers)} articles by 'article-list-item' class")
+            for selector in selectors:
+                logger.info(f"Trying selector: {selector}")
+                elements = soup.select(selector)
+                logger.info(f"Found {len(elements)} elements with selector {selector}")
+                
+                if elements:
+                    article_containers.extend(elements)
+                    # Log the first element's HTML for debugging
+                    logger.info(f"First element HTML: {elements[0].prettify()}")
         
         # Remove duplicates while preserving order
         seen = set()

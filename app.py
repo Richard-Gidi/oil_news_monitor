@@ -130,49 +130,76 @@ def filter_articles_by_keywords(articles, keywords):
     return filtered_articles
 
 def summarize_articles(articles):
-    """Summarize articles focusing on USD and oil market impact"""
+    """Generate a narrative summary of the articles' impact on the market"""
     if not articles:
-        return "No articles to summarize."
-    
-    # Group articles by source
-    articles_by_source = {}
-    for article in articles:
-        source = article['source']
-        if source not in articles_by_source:
-            articles_by_source[source] = []
-        articles_by_source[source].append(article)
-    
-    # Create summary for each source
-    summaries = []
-    for source, source_articles in articles_by_source.items():
-        titles = [a['title'] for a in source_articles]
-        summary = f"{source}: {'; '.join(titles)}"
-        summaries.append(summary)
-    
-    # Combine all summaries
-    full_summary = "\n\n".join(summaries)
-    
-    # Add market impact analysis
-    impact_keywords = {
-        'price': ['price', 'cost', 'value', 'dollar', 'usd'],
-        'supply': ['supply', 'production', 'output', 'inventory'],
-        'demand': ['demand', 'consumption', 'usage'],
-        'geopolitical': ['opec', 'russia', 'saudi', 'iran', 'conflict', 'sanction']
+        return "No articles available for analysis."
+
+    # Count impacts by category
+    impact_counts = {
+        'Bullish': 0,
+        'Bearish': 0,
+        'Neutral': 0
     }
     
-    impact_analysis = []
-    for category, keywords in impact_keywords.items():
-        relevant_articles = [
-            article for article in articles
-            if any(kw in article['title'].lower() for kw in keywords)
-        ]
-        if relevant_articles:
-            impact_analysis.append(f"{category.title()}: {len(relevant_articles)} articles")
+    # Track key themes
+    themes = {
+        'supply': [],
+        'demand': [],
+        'geopolitical': [],
+        'economic': []
+    }
+
+    for article in articles:
+        mechanism, impact, intensity = analyze_economic_impact(article['title'])
+        impact_counts[impact] += 1
+        
+        # Categorize by theme
+        if 'supply' in mechanism.lower():
+            themes['supply'].append(article['title'])
+        elif 'demand' in mechanism.lower():
+            themes['demand'].append(article['title'])
+        elif 'geopolitical' in mechanism.lower() or 'risk' in mechanism.lower():
+            themes['geopolitical'].append(article['title'])
+        else:
+            themes['economic'].append(article['title'])
+
+    # Determine overall market sentiment
+    total_articles = len(articles)
+    if total_articles == 0:
+        return "No articles available for analysis."
+
+    bullish_ratio = impact_counts['Bullish'] / total_articles
+    bearish_ratio = impact_counts['Bearish'] / total_articles
+
+    # Generate narrative summary
+    summary = "### Market Sentiment Analysis\n\n"
     
-    if impact_analysis:
-        full_summary += "\n\nMarket Impact Analysis:\n" + "\n".join(impact_analysis)
+    if bullish_ratio > 0.6:
+        summary += "📈 **Strong Bullish Sentiment**: The market is showing strong upward pressure with "
+    elif bullish_ratio > 0.4:
+        summary += "📈 **Moderately Bullish Sentiment**: The market is showing moderate upward pressure with "
+    elif bearish_ratio > 0.6:
+        summary += "📉 **Strong Bearish Sentiment**: The market is showing strong downward pressure with "
+    elif bearish_ratio > 0.4:
+        summary += "📉 **Moderately Bearish Sentiment**: The market is showing moderate downward pressure with "
+    else:
+        summary += "↔️ **Neutral Market Sentiment**: The market is showing mixed signals with "
+
+    summary += f"{impact_counts['Bullish']} bullish, {impact_counts['Bearish']} bearish, and {impact_counts['Neutral']} neutral articles.\n\n"
+
+    # Add key themes
+    summary += "### Key Market Themes\n\n"
     
-    return full_summary
+    if themes['geopolitical']:
+        summary += "🌍 **Geopolitical Factors**: " + " ".join(themes['geopolitical'][:2]) + "\n\n"
+    if themes['supply']:
+        summary += "🛢️ **Supply Factors**: " + " ".join(themes['supply'][:2]) + "\n\n"
+    if themes['demand']:
+        summary += "📊 **Demand Factors**: " + " ".join(themes['demand'][:2]) + "\n\n"
+    if themes['economic']:
+        summary += "💰 **Economic Factors**: " + " ".join(themes['economic'][:2]) + "\n\n"
+
+    return summary
 
 def analyze_economic_impact(text):
     """Analyze the economic impact and transmission mechanism of news"""
@@ -253,7 +280,19 @@ def analyze_economic_impact(text):
 
 def main():
     st.title("Oil News Monitor")
+    
+    # Date range selector
     st.sidebar.title("Settings")
+    st.sidebar.subheader("Date Range")
+    today = datetime.now()
+    default_start = today - timedelta(days=7)
+    start_date = st.sidebar.date_input("Start Date", default_start)
+    end_date = st.sidebar.date_input("End Date", today)
+    
+    if start_date > end_date:
+        st.sidebar.error("Start date must be before end date")
+        return
+
     st.sidebar.subheader("Keyword Filter")
     keywords_input = st.sidebar.text_input(
         "Enter keywords (comma-separated):",
@@ -292,24 +331,37 @@ def main():
             if not articles:
                 st.warning("No articles found. Please check the debug section for more information.")
             else:
-                filtered_articles = filter_articles_by_keywords(articles, keywords)
+                # Filter articles by date
+                filtered_articles = [
+                    article for article in articles 
+                    if start_date <= article.get('date', today).date() <= end_date
+                ]
+                
+                # Filter by keywords
+                filtered_articles = filter_articles_by_keywords(filtered_articles, keywords)
+                
                 with st.expander("Debug: Raw Articles", expanded=False):
                     st.write(f"Total articles fetched: {len(articles)}")
+                    st.write(f"Articles in date range: {len(filtered_articles)}")
                     st.write(f"Articles matching keywords: {len(filtered_articles)}")
                     for article in articles:
                         st.write(f"- {article['title']} ({article['source']})")
+                
                 # --- SUMMARY SECTION ---
-                st.markdown("### 📝 Summary: Impact on USD and Oil Market")
+                st.markdown("### 📝 Market Analysis Summary")
                 summary = summarize_articles(filtered_articles)
                 st.info(summary)
                 # --- END SUMMARY SECTION ---
+                
                 if not filtered_articles:
-                    st.info(f"No articles found matching the keywords: {', '.join(keywords)}")
+                    st.info(f"No articles found matching the criteria for the period {start_date} to {end_date}")
                 else:
                     for i, article in enumerate(filtered_articles):
                         with st.container():
                             st.markdown(f"### {article['title']}")
                             st.markdown(f"Source: {article['source']}")
+                            if 'date' in article:
+                                st.markdown(f"Date: {article['date'].strftime('%Y-%m-%d')}")
                             st.markdown(f"[Read more]({article['url']})")
                             
                             # Economic Impact Analysis

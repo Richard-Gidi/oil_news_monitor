@@ -14,13 +14,17 @@ import sys
 from io import StringIO
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Create a string buffer to capture logs
 log_buffer = StringIO()
 handler = logging.StreamHandler(log_buffer)
 handler.setLevel(logging.INFO)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(handler)
 
 # --- Setup ---

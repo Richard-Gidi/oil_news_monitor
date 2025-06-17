@@ -45,195 +45,163 @@ def safe_request(url, timeout=30, max_retries=3):
     return None
 
 def get_articles_oilprice():
-    """Fetch articles from OilPrice.com"""
+    """Get articles from OilPrice.com"""
     try:
         url = "https://oilprice.com/Latest-Energy-News/World-News/"
-        logger.info(f"Starting to fetch from OilPrice: {url}")
-        
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from OilPrice")
+        response = safe_request(url)
+        if not response:
             return []
             
-        soup = BeautifulSoup(res.text, 'html.parser')
+        soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'div.categoryArticle',
-            'article.categoryArticle',
-            'div.article-list-item',
-            'div.article-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
-            
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://oilprice.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'OilPrice'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
-        
-        logger.info(f"Total articles found from OilPrice: {len(articles)}")
-        return articles[:10] if articles else []
+        # Find all article containers
+        for article in soup.find_all('div', class_='categoryArticle'):
+            try:
+                title_elem = article.find('h2', class_='categoryArticleTitle')
+                if not title_elem:
+                    continue
+                    
+                title = title_elem.get_text(strip=True)
+                link = title_elem.find('a')['href']
+                
+                # Get date
+                date_elem = article.find('span', class_='article_byline')
+                date_str = date_elem.get_text(strip=True) if date_elem else None
+                date = None
+                if date_str:
+                    try:
+                        # Try to parse the date string
+                        date = datetime.strptime(date_str, '%b %d, %Y')
+                    except:
+                        try:
+                            # Try alternative format
+                            date = datetime.strptime(date_str, '%B %d, %Y')
+                        except:
+                            date = None
+                
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'OilPrice',
+                    'date': date
+                })
+            except Exception as e:
+                logger.error(f"Error parsing OilPrice article: {str(e)}")
+                continue
+                
+        logger.info(f"Found {len(articles)} articles from OilPrice")
+        return articles
     except Exception as e:
-        logger.error(f"Error fetching OilPrice: {str(e)}")
+        logger.error(f"Error fetching from OilPrice: {str(e)}")
         return []
 
 def get_articles_reuters():
-    """Fetch articles from Reuters"""
+    """Get articles from Reuters Energy News"""
     try:
         url = "https://www.reuters.com/business/energy/"
-        logger.info(f"Starting to fetch from Reuters: {url}")
-        
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Reuters")
+        response = safe_request(url)
+        if not response:
             return []
             
-        soup = BeautifulSoup(res.text, 'html.parser')
+        soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'div[data-testid="MediaStoryCard"]',
-            'div[data-testid="StoryCard"]',
-            'article.story-card',
-            'div.story-card',
-            'div.article-item',
-            'article.article-item'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
-            
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = [
-                    'h3', 'h2', 'a[data-testid="Headline"]',
-                    'a.headline', 'a.title', 'h3 a', 'h2 a'
-                ]
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.reuters.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Reuters'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
-        
-        logger.info(f"Total articles found from Reuters: {len(articles)}")
-        return articles[:10] if articles else []
+        # Find all article containers
+        for article in soup.find_all(['article', 'div'], class_=['media-story-card', 'story-card']):
+            try:
+                title_elem = article.find(['h3', 'h2'], class_=['media-story-card__heading__eqhp9', 'story-card__heading'])
+                if not title_elem:
+                    continue
+                    
+                title = title_elem.get_text(strip=True)
+                link = article.find('a')['href']
+                if not link.startswith('http'):
+                    link = urljoin(url, link)
+                
+                # Get date
+                date_elem = article.find(['time', 'span'], class_=['media-story-card__timestamp__1j5qf', 'story-card__timestamp'])
+                date_str = date_elem.get_text(strip=True) if date_elem else None
+                date = None
+                if date_str:
+                    try:
+                        # Try to parse the date string
+                        date = datetime.strptime(date_str, '%b %d, %Y')
+                    except:
+                        try:
+                            # Try alternative format
+                            date = datetime.strptime(date_str, '%B %d, %Y')
+                        except:
+                            date = None
+                
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Reuters',
+                    'date': date
+                })
+            except Exception as e:
+                logger.error(f"Error parsing Reuters article: {str(e)}")
+                continue
+                
+        logger.info(f"Found {len(articles)} articles from Reuters")
+        return articles
     except Exception as e:
-        logger.error(f"Error fetching Reuters: {str(e)}")
+        logger.error(f"Error fetching from Reuters: {str(e)}")
         return []
 
 def get_articles_bloomberg():
-    """Fetch articles from Bloomberg Energy"""
+    """Get articles from Bloomberg Energy News"""
     try:
         url = "https://www.bloomberg.com/markets/commodities"
-        logger.info(f"Starting to fetch from Bloomberg: {url}")
-        
-        res = safe_request(url)
-        if not res:
-            logger.error("Failed to get response from Bloomberg")
+        response = safe_request(url)
+        if not response:
             return []
             
-        soup = BeautifulSoup(res.text, 'html.parser')
+        soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        # Try multiple selectors
-        selectors = [
-            'div.story-list-story',
-            'article.story-list-story',
-            'div.story',
-            'article.story',
-            'div[data-type="article"]',
-            'article[data-type="article"]',
-            'div.headline-list__item'
-        ]
-        
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
-            
-            for article in elements:
-                # Try multiple title selectors
-                title_selectors = [
-                    'h3 a', 'h2 a', 'a.headline', 'a.title',
-                    'h3', 'h2', 'a[data-type="headline"]',
-                    'div.headline__text'
-                ]
-                for title_selector in title_selectors:
-                    title = article.select_one(title_selector)
-                    if title:
-                        title_text = title.text.strip()
-                        if not title_text:
-                            continue
-                            
-                        # Get link from title or parent
-                        link = title.get('href', '')
-                        if not link and title.parent:
-                            link = title.parent.get('href', '')
-                            
-                        if not link.startswith('http'):
-                            link = urljoin('https://www.bloomberg.com', link)
-                            
-                        articles.append({
-                            'title': title_text,
-                            'url': link,
-                            'source': 'Bloomberg'
-                        })
-                        logger.info(f"Found article: {title_text}")
-                        break
-        
-        logger.info(f"Total articles found from Bloomberg: {len(articles)}")
-        return articles[:10] if articles else []
+        # Find all article containers
+        for article in soup.find_all(['article', 'div'], class_=['story-list-story', 'story-package-module__story']):
+            try:
+                title_elem = article.find(['h3', 'h2'], class_=['headline__text', 'story-package-module__headline'])
+                if not title_elem:
+                    continue
+                    
+                title = title_elem.get_text(strip=True)
+                link = article.find('a')['href']
+                if not link.startswith('http'):
+                    link = urljoin(url, link)
+                
+                # Get date
+                date_elem = article.find(['time', 'span'], class_=['timestamp', 'story-package-module__timestamp'])
+                date_str = date_elem.get_text(strip=True) if date_elem else None
+                date = None
+                if date_str:
+                    try:
+                        # Try to parse the date string
+                        date = datetime.strptime(date_str, '%b %d, %Y')
+                    except:
+                        try:
+                            # Try alternative format
+                            date = datetime.strptime(date_str, '%B %d, %Y')
+                        except:
+                            date = None
+                
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'source': 'Bloomberg',
+                    'date': date
+                })
+            except Exception as e:
+                logger.error(f"Error parsing Bloomberg article: {str(e)}")
+                continue
+                
+        logger.info(f"Found {len(articles)} articles from Bloomberg")
+        return articles
     except Exception as e:
-        logger.error(f"Error fetching Bloomberg: {str(e)}")
+        logger.error(f"Error fetching from Bloomberg: {str(e)}")
         return []
 
 def test_source(source_func):
@@ -255,28 +223,26 @@ def fetch_all_articles():
     """Fetch articles from all sources"""
     all_articles = []
     
-    # List of sources to try
+    # Fetch from each source
     sources = [
         get_articles_oilprice,
         get_articles_reuters,
         get_articles_bloomberg
     ]
     
-    # Test each source first
-    logger.info("Starting to test all sources...")
     for source_func in sources:
-        success, count = test_source(source_func)
-        if success:
-            try:
-                articles = source_func()
-                if articles:
-                    all_articles.extend(articles)
-                    logger.info(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
-                time.sleep(random.uniform(2, 4))
-            except Exception as e:
-                logger.error(f"Error in source {source_func.__name__}: {str(e)}")
-                continue
+        try:
+            articles = source_func()
+            if articles:
+                all_articles.extend(articles)
+            time.sleep(2)  # Delay between requests
+        except Exception as e:
+            logger.error(f"Error fetching from source: {str(e)}")
+            continue
     
-    logger.info(f"Total articles fetched across all sources: {len(all_articles)}")
-    return sorted(all_articles, key=lambda x: x['source'])[:30]
+    # Sort articles by date if available, otherwise by source
+    all_articles.sort(key=lambda x: (x.get('date', datetime.min), x['source']), reverse=True)
+    
+    logger.info(f"Total articles fetched: {len(all_articles)}")
+    return all_articles
 

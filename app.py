@@ -288,6 +288,15 @@ def analyze_economic_impact(text):
         logger.error(f"Error in economic impact analysis: {str(e)}")
         return "Error in analysis", "Neutral", "Neutral"
 
+def format_date(date):
+    """Format date consistently"""
+    if not date:
+        return "Date not available"
+    try:
+        return date.strftime("%B %d, %Y")
+    except:
+        return "Date not available"
+
 def main():
     st.title("Oil News Monitor")
     
@@ -318,7 +327,8 @@ def main():
             if articles:
                 st.sidebar.write("Sample articles:")
                 for article in articles[:3]:
-                    st.sidebar.write(f"- {article['title']} ({article['source']})")
+                    date_str = format_date(article.get('date'))
+                    st.sidebar.write(f"- {article['title']} ({article['source']}) - {date_str}")
         except Exception as e:
             st.sidebar.error(f"Error testing news fetch: {str(e)}")
 
@@ -355,7 +365,8 @@ def main():
                     st.write(f"Articles in date range: {len(filtered_articles)}")
                     st.write(f"Articles matching keywords: {len(filtered_articles)}")
                     for article in articles:
-                        st.write(f"- {article['title']} ({article['source']})")
+                        date_str = format_date(article.get('date'))
+                        st.write(f"- {article['title']} ({article['source']}) - {date_str}")
                 
                 # --- SUMMARY SECTION ---
                 st.markdown("### 📝 Market Analysis Summary")
@@ -369,9 +380,8 @@ def main():
                     for i, article in enumerate(filtered_articles):
                         with st.container():
                             st.markdown(f"### {article['title']}")
-                            st.markdown(f"Source: {article['source']}")
-                            if 'date' in article:
-                                st.markdown(f"Date: {article['date'].strftime('%Y-%m-%d')}")
+                            date_str = format_date(article.get('date'))
+                            st.markdown(f"**{article['source']}** • {date_str}")
                             st.markdown(f"[Read more]({article['url']})")
                             
                             # Economic Impact Analysis

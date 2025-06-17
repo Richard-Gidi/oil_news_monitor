@@ -107,28 +107,65 @@ def get_articles_oilprice():
         return []
 
 def get_articles_reuters():
-    """Fetch articles from Reuters using RSS feed"""
+    """Fetch articles from Reuters"""
     try:
-        url = "https://www.reutersagency.com/feed/?best-topics=energy&post_type=best"
-        logger.info(f"Starting to fetch from Reuters RSS: {url}")
+        url = "https://www.reuters.com/business/energy/"
+        logger.info(f"Starting to fetch from Reuters: {url}")
         
-        feed = feedparser.parse(url)
+        res = safe_request(url)
+        if not res:
+            logger.error("Failed to get response from Reuters")
+            return []
+            
+        soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
-        for entry in feed.entries[:10]:
-            title = entry.title
-            link = entry.link
+        # Try multiple selectors
+        selectors = [
+            'div[data-testid="MediaStoryCard"]',
+            'div[data-testid="StoryCard"]',
+            'article.story-card',
+            'div.story-card',
+            'div.article-item',
+            'article.article-item'
+        ]
+        
+        for selector in selectors:
+            logger.info(f"Trying selector: {selector}")
+            elements = soup.select(selector)
+            logger.info(f"Found {len(elements)} elements with selector {selector}")
             
-            if title and link:
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'source': 'Reuters'
-                })
-                logger.info(f"Found article: {title}")
+            for article in elements:
+                # Try multiple title selectors
+                title_selectors = [
+                    'h3', 'h2', 'a[data-testid="Headline"]',
+                    'a.headline', 'a.title', 'h3 a', 'h2 a'
+                ]
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.reuters.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Reuters'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
         
         logger.info(f"Total articles found from Reuters: {len(articles)}")
-        return articles
+        return articles[:10] if articles else []
     except Exception as e:
         logger.error(f"Error fetching Reuters: {str(e)}")
         return []
@@ -136,7 +173,7 @@ def get_articles_reuters():
 def get_articles_bloomberg():
     """Fetch articles from Bloomberg Energy"""
     try:
-        url = "https://www.bloomberg.com/energy"
+        url = "https://www.bloomberg.com/markets/commodities"
         logger.info(f"Starting to fetch from Bloomberg: {url}")
         
         res = safe_request(url)
@@ -149,12 +186,13 @@ def get_articles_bloomberg():
         
         # Try multiple selectors
         selectors = [
-            'article.story-list-story',
             'div.story-list-story',
-            'article.story',
+            'article.story-list-story',
             'div.story',
+            'article.story',
             'div[data-type="article"]',
-            'article[data-type="article"]'
+            'article[data-type="article"]',
+            'div.headline-list__item'
         ]
         
         for selector in selectors:
@@ -166,7 +204,8 @@ def get_articles_bloomberg():
                 # Try multiple title selectors
                 title_selectors = [
                     'h3 a', 'h2 a', 'a.headline', 'a.title',
-                    'h3', 'h2', 'a[data-type="headline"]'
+                    'h3', 'h2', 'a[data-type="headline"]',
+                    'div.headline__text'
                 ]
                 for title_selector in title_selectors:
                     title = article.select_one(title_selector)

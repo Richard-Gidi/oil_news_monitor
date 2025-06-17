@@ -40,6 +40,76 @@ def safe_request(url, max_retries=3):
                 logger.error(f"Failed to fetch {url} after {max_retries} attempts")
                 return None
 
+def parse_date(date_str, source):
+    """Parse date string based on source format"""
+    if not date_str:
+        return None
+        
+    date_str = date_str.strip()
+    
+    # Common date formats
+    date_formats = [
+        '%B %d, %Y',  # January 15, 2024
+        '%b %d, %Y',  # Jan 15, 2024
+        '%Y-%m-%d',   # 2024-01-15
+        '%d %B %Y',   # 15 January 2024
+        '%d %b %Y',   # 15 Jan 2024
+        '%m/%d/%Y',   # 01/15/2024
+        '%d/%m/%Y',   # 15/01/2024
+    ]
+    
+    # Source-specific date formats
+    source_formats = {
+        'OilPrice': [
+            '%B %d, %Y',
+            '%b %d, %Y',
+            '%Y-%m-%d',
+            '%d %B %Y',
+            '%d %b %Y'
+        ],
+        'Reuters': [
+            '%B %d, %Y',
+            '%b %d, %Y',
+            '%Y-%m-%d',
+            '%d %B %Y',
+            '%d %b %Y'
+        ],
+        'Bloomberg': [
+            '%B %d, %Y',
+            '%b %d, %Y',
+            '%Y-%m-%d',
+            '%d %B %Y',
+            '%d %b %Y'
+        ]
+    }
+    
+    # Try source-specific formats first
+    formats_to_try = source_formats.get(source, []) + date_formats
+    
+    for date_format in formats_to_try:
+        try:
+            return datetime.strptime(date_str, date_format)
+        except ValueError:
+            continue
+            
+    # If all parsing attempts fail, try to extract date using regex
+    try:
+        # Look for patterns like "2 hours ago", "5 days ago", etc.
+        if 'ago' in date_str.lower():
+            number = int(''.join(filter(str.isdigit, date_str)))
+            if 'hour' in date_str.lower():
+                return datetime.now() - timedelta(hours=number)
+            elif 'day' in date_str.lower():
+                return datetime.now() - timedelta(days=number)
+            elif 'week' in date_str.lower():
+                return datetime.now() - timedelta(weeks=number)
+            elif 'month' in date_str.lower():
+                return datetime.now() - timedelta(days=number*30)
+    except:
+        pass
+        
+    return None
+
 def get_articles_oilprice():
     """Get articles from OilPrice.com"""
     try:
@@ -89,20 +159,25 @@ def get_articles_oilprice():
                             if not link.startswith('http'):
                                 link = urljoin('https://oilprice.com', link)
                             
-                            # Get date
-                            date_elem = article.find(['span', 'time'], class_=['article_byline', 'date', 'timestamp'])
-                            date_str = date_elem.get_text(strip=True) if date_elem else None
-                            date = None
-                            if date_str:
-                                try:
-                                    # Try to parse the date string
-                                    date = datetime.strptime(date_str, '%b %d, %Y')
-                                except:
-                                    try:
-                                        # Try alternative format
-                                        date = datetime.strptime(date_str, '%B %d, %Y')
-                                    except:
-                                        date = None
+                            # Get date - try multiple selectors
+                            date_selectors = [
+                                'span.article_byline',
+                                'span.date',
+                                'time',
+                                'span.timestamp',
+                                'div.date',
+                                'div.timestamp'
+                            ]
+                            
+                            date_str = None
+                            for date_selector in date_selectors:
+                                date_elem = article.select_one(date_selector)
+                                if date_elem:
+                                    date_str = date_elem.get_text(strip=True)
+                                    if date_str:
+                                        break
+                            
+                            date = parse_date(date_str, 'OilPrice')
                             
                             articles.append({
                                 'title': title_text,
@@ -110,7 +185,7 @@ def get_articles_oilprice():
                                 'source': 'OilPrice',
                                 'date': date
                             })
-                            logger.info(f"Found article: {title_text}")
+                            logger.info(f"Found article: {title_text} with date: {date}")
                             break
                 except Exception as e:
                     logger.error(f"Error parsing OilPrice article: {str(e)}")
@@ -173,20 +248,24 @@ def get_articles_reuters():
                             if not link.startswith('http'):
                                 link = urljoin('https://www.reuters.com', link)
                             
-                            # Get date
-                            date_elem = article.find(['time', 'span'], class_=['media-story-card__timestamp__1j5qf', 'story-card__timestamp'])
-                            date_str = date_elem.get_text(strip=True) if date_elem else None
-                            date = None
-                            if date_str:
-                                try:
-                                    # Try to parse the date string
-                                    date = datetime.strptime(date_str, '%b %d, %Y')
-                                except:
-                                    try:
-                                        # Try alternative format
-                                        date = datetime.strptime(date_str, '%B %d, %Y')
-                                    except:
-                                        date = None
+                            # Get date - try multiple selectors
+                            date_selectors = [
+                                'time[data-testid="PublishedDate"]',
+                                'span[data-testid="PublishedDate"]',
+                                'time',
+                                'span.timestamp',
+                                'div.timestamp'
+                            ]
+                            
+                            date_str = None
+                            for date_selector in date_selectors:
+                                date_elem = article.select_one(date_selector)
+                                if date_elem:
+                                    date_str = date_elem.get_text(strip=True)
+                                    if date_str:
+                                        break
+                            
+                            date = parse_date(date_str, 'Reuters')
                             
                             articles.append({
                                 'title': title_text,
@@ -194,7 +273,7 @@ def get_articles_reuters():
                                 'source': 'Reuters',
                                 'date': date
                             })
-                            logger.info(f"Found article: {title_text}")
+                            logger.info(f"Found article: {title_text} with date: {date}")
                             break
                 except Exception as e:
                     logger.error(f"Error parsing Reuters article: {str(e)}")
@@ -259,20 +338,24 @@ def get_articles_bloomberg():
                             if not link.startswith('http'):
                                 link = urljoin('https://www.bloomberg.com', link)
                             
-                            # Get date
-                            date_elem = article.find(['time', 'span'], class_=['timestamp', 'story-package-module__timestamp'])
-                            date_str = date_elem.get_text(strip=True) if date_elem else None
-                            date = None
-                            if date_str:
-                                try:
-                                    # Try to parse the date string
-                                    date = datetime.strptime(date_str, '%b %d, %Y')
-                                except:
-                                    try:
-                                        # Try alternative format
-                                        date = datetime.strptime(date_str, '%B %d, %Y')
-                                    except:
-                                        date = None
+                            # Get date - try multiple selectors
+                            date_selectors = [
+                                'time.timestamp',
+                                'span.timestamp',
+                                'time',
+                                'span.date',
+                                'div.timestamp'
+                            ]
+                            
+                            date_str = None
+                            for date_selector in date_selectors:
+                                date_elem = article.select_one(date_selector)
+                                if date_elem:
+                                    date_str = date_elem.get_text(strip=True)
+                                    if date_str:
+                                        break
+                            
+                            date = parse_date(date_str, 'Bloomberg')
                             
                             articles.append({
                                 'title': title_text,
@@ -280,7 +363,7 @@ def get_articles_bloomberg():
                                 'source': 'Bloomberg',
                                 'date': date
                             })
-                            logger.info(f"Found article: {title_text}")
+                            logger.info(f"Found article: {title_text} with date: {date}")
                             break
                 except Exception as e:
                     logger.error(f"Error parsing Bloomberg article: {str(e)}")

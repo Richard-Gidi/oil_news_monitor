@@ -106,11 +106,11 @@ def get_articles_oilprice():
         logger.error(f"Error fetching OilPrice: {str(e)}")
         return []
 
-def get_articles_rigzone():
-    """Fetch articles from Rigzone.com using RSS feed"""
+def get_articles_reuters():
+    """Fetch articles from Reuters using RSS feed"""
     try:
-        url = "https://www.rigzone.com/news/rss/"
-        logger.info(f"Starting to fetch from Rigzone RSS: {url}")
+        url = "https://www.reutersagency.com/feed/?best-topics=energy&post_type=best"
+        logger.info(f"Starting to fetch from Reuters RSS: {url}")
         
         feed = feedparser.parse(url)
         articles = []
@@ -123,41 +123,78 @@ def get_articles_rigzone():
                 articles.append({
                     'title': title,
                     'url': link,
-                    'source': 'Rigzone'
+                    'source': 'Reuters'
                 })
                 logger.info(f"Found article: {title}")
         
-        logger.info(f"Total articles found from Rigzone: {len(articles)}")
+        logger.info(f"Total articles found from Reuters: {len(articles)}")
         return articles
     except Exception as e:
-        logger.error(f"Error fetching Rigzone: {str(e)}")
+        logger.error(f"Error fetching Reuters: {str(e)}")
         return []
 
-def get_articles_energy_voice():
-    """Fetch articles from EnergyVoice.com using RSS feed"""
+def get_articles_bloomberg():
+    """Fetch articles from Bloomberg Energy"""
     try:
-        url = "https://www.energyvoice.com/feed/"
-        logger.info(f"Starting to fetch from Energy Voice RSS: {url}")
+        url = "https://www.bloomberg.com/energy"
+        logger.info(f"Starting to fetch from Bloomberg: {url}")
         
-        feed = feedparser.parse(url)
+        res = safe_request(url)
+        if not res:
+            logger.error("Failed to get response from Bloomberg")
+            return []
+            
+        soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
-        for entry in feed.entries[:10]:
-            title = entry.title
-            link = entry.link
-            
-            if title and link:
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'source': 'Energy Voice'
-                })
-                logger.info(f"Found article: {title}")
+        # Try multiple selectors
+        selectors = [
+            'article.story-list-story',
+            'div.story-list-story',
+            'article.story',
+            'div.story',
+            'div[data-type="article"]',
+            'article[data-type="article"]'
+        ]
         
-        logger.info(f"Total articles found from Energy Voice: {len(articles)}")
-        return articles
+        for selector in selectors:
+            logger.info(f"Trying selector: {selector}")
+            elements = soup.select(selector)
+            logger.info(f"Found {len(elements)} elements with selector {selector}")
+            
+            for article in elements:
+                # Try multiple title selectors
+                title_selectors = [
+                    'h3 a', 'h2 a', 'a.headline', 'a.title',
+                    'h3', 'h2', 'a[data-type="headline"]'
+                ]
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.bloomberg.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Bloomberg'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
+        
+        logger.info(f"Total articles found from Bloomberg: {len(articles)}")
+        return articles[:10] if articles else []
     except Exception as e:
-        logger.error(f"Error fetching Energy Voice: {str(e)}")
+        logger.error(f"Error fetching Bloomberg: {str(e)}")
         return []
 
 def get_articles_offshore_energy():
@@ -187,33 +224,6 @@ def get_articles_offshore_energy():
         logger.error(f"Error fetching Offshore Energy: {str(e)}")
         return []
 
-def get_articles_upstream():
-    """Fetch articles from Upstream using RSS feed"""
-    try:
-        url = "https://www.upstreamonline.com/feed/"
-        logger.info(f"Starting to fetch from Upstream RSS: {url}")
-        
-        feed = feedparser.parse(url)
-        articles = []
-        
-        for entry in feed.entries[:10]:
-            title = entry.title
-            link = entry.link
-            
-            if title and link:
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'source': 'Upstream'
-                })
-                logger.info(f"Found article: {title}")
-        
-        logger.info(f"Total articles found from Upstream: {len(articles)}")
-        return articles
-    except Exception as e:
-        logger.error(f"Error fetching Upstream: {str(e)}")
-        return []
-
 def test_source(source_func):
     """Test a single source and return the results"""
     try:
@@ -236,10 +246,9 @@ def fetch_all_articles():
     # List of sources to try
     sources = [
         get_articles_oilprice,
-        get_articles_rigzone,
-        get_articles_energy_voice,
-        get_articles_offshore_energy,
-        get_articles_upstream
+        get_articles_reuters,
+        get_articles_bloomberg,
+        get_articles_offshore_energy
     ]
     
     # Test each source first

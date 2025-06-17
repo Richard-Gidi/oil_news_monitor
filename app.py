@@ -94,7 +94,9 @@ def get_sentiment_color(sentiment, intensity):
             return "pink"
         else:
             return "lightcoral"
-    else:
+    elif sentiment == "Mixed":
+        return "orange"
+    else:  # Neutral
         return "gray"
 
 def get_oil_price_data():
@@ -138,6 +140,7 @@ def summarize_articles(articles):
     impact_counts = {
         'Bullish': 0,
         'Bearish': 0,
+        'Mixed': 0,
         'Neutral': 0
     }
     
@@ -170,11 +173,14 @@ def summarize_articles(articles):
 
     bullish_ratio = impact_counts['Bullish'] / total_articles
     bearish_ratio = impact_counts['Bearish'] / total_articles
+    mixed_ratio = impact_counts['Mixed'] / total_articles
 
     # Generate narrative summary
     summary = "### Market Sentiment Analysis\n\n"
     
-    if bullish_ratio > 0.6:
+    if mixed_ratio > 0.4:
+        summary += "🔄 **Mixed Market Sentiment**: The market shows conflicting signals with "
+    elif bullish_ratio > 0.6:
         summary += "📈 **Strong Bullish Sentiment**: The market is showing strong upward pressure with "
     elif bullish_ratio > 0.4:
         summary += "📈 **Moderately Bullish Sentiment**: The market is showing moderate upward pressure with "
@@ -185,7 +191,7 @@ def summarize_articles(articles):
     else:
         summary += "↔️ **Neutral Market Sentiment**: The market is showing mixed signals with "
 
-    summary += f"{impact_counts['Bullish']} bullish, {impact_counts['Bearish']} bearish, and {impact_counts['Neutral']} neutral articles.\n\n"
+    summary += f"{impact_counts['Bullish']} bullish, {impact_counts['Bearish']} bearish, {impact_counts['Mixed']} mixed, and {impact_counts['Neutral']} neutral articles.\n\n"
 
     # Add key themes
     summary += "### Key Market Themes\n\n"
@@ -271,6 +277,10 @@ def analyze_economic_impact(text):
 
         # Calculate intensity based on number of matching keywords
         intensity = "Strong" if len(primary_category[1]['matches']) > 2 else "Moderate" if len(primary_category[1]['matches']) > 1 else "Weak"
+
+        # For Mixed impact, always set intensity to Moderate
+        if impact == "Mixed":
+            intensity = "Moderate"
 
         return mechanism, impact, intensity
 

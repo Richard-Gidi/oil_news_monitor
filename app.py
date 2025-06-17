@@ -293,6 +293,8 @@ def format_date(date):
     if not date:
         return "Date not available"
     try:
+        if isinstance(date, str):
+            return date
         return date.strftime("%B %d, %Y")
     except:
         return "Date not available"
@@ -352,10 +354,21 @@ def main():
                 st.warning("No articles found. Please check the debug section for more information.")
             else:
                 # Filter articles by date
-                filtered_articles = [
-                    article for article in articles 
-                    if start_date <= article.get('date', today).date() <= end_date
-                ]
+                filtered_articles = []
+                for article in articles:
+                    article_date = article.get('date')
+                    if article_date:
+                        try:
+                            if isinstance(article_date, str):
+                                article_date = datetime.strptime(article_date, "%B %d, %Y")
+                            if start_date <= article_date.date() <= end_date:
+                                filtered_articles.append(article)
+                        except:
+                            # If date parsing fails, include the article anyway
+                            filtered_articles.append(article)
+                    else:
+                        # If no date is available, include the article
+                        filtered_articles.append(article)
                 
                 # Filter by keywords
                 filtered_articles = filter_articles_by_keywords(filtered_articles, keywords)

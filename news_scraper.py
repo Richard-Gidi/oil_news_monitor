@@ -61,11 +61,10 @@ def parse_date(date_str, source):
     # Source-specific date formats
     source_formats = {
         'OilPrice': [
-            '%B %d, %Y',
-            '%b %d, %Y',
-            '%Y-%m-%d',
-            '%d %B %Y',
-            '%d %b %Y'
+            '%b %d, %Y, %I:%M %p %Z',  # Jun 17, 2025, 1:54 AM CDT
+            '%B %d, %Y, %I:%M %p %Z',  # June 17, 2025, 1:54 AM CDT
+            '%b %d, %Y',  # Jun 17, 2025
+            '%B %d, %Y',  # June 17, 2025
         ],
         'Reuters': [
             '%B %d, %Y',
@@ -166,18 +165,28 @@ def get_articles_oilprice():
                                 'time',
                                 'span.timestamp',
                                 'div.date',
-                                'div.timestamp'
+                                'div.timestamp',
+                                'div.article_byline',
+                                'div.article-meta'
                             ]
                             
                             date_str = None
                             for date_selector in date_selectors:
                                 date_elem = article.select_one(date_selector)
                                 if date_elem:
-                                    date_str = date_elem.get_text(strip=True)
-                                    if date_str:
+                                    # Get the full text which includes the date
+                                    full_text = date_elem.get_text(strip=True)
+                                    # Look for the date pattern in the text
+                                    if 'By' in full_text and any(month in full_text for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']):
+                                        # Extract the date part after "By"
+                                        date_parts = full_text.split('By')[1].strip()
+                                        if '-' in date_parts:
+                                            date_parts = date_parts.split('-')[1].strip()
+                                        date_str = date_parts
                                         break
                             
                             date = parse_date(date_str, 'OilPrice')
+                            logger.info(f"Parsed date string '{date_str}' to {date}")
                             
                             articles.append({
                                 'title': title_text,

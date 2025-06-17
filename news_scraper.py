@@ -50,12 +50,13 @@ def get_articles_oilprice():
             'div.categoryArticle',
             'article.categoryArticle',
             'div.article-list-item',
-            'div.article-item'
+            'div.article-item',
+            'div.article'
         ]
         
         for selector in selectors:
             for article in soup.select(selector):
-                title = article.select_one('h2 a, h3 a, a.title')
+                title = article.select_one('h2 a, h3 a, a.title, a.headline')
                 if title:
                     title_text = title.text.strip()
                     link = title.get('href', '')
@@ -88,7 +89,8 @@ def get_articles_reuters():
         selectors = [
             'div[data-testid="MediaStoryCard"]',
             'div[data-testid="StoryCard"]',
-            'article.story-card'
+            'article.story-card',
+            'div.story-card'
         ]
         
         for selector in selectors:
@@ -127,12 +129,13 @@ def get_articles_rigzone():
         selectors = [
             'div.article-list-item',
             'article.article-list-item',
-            'div.article-item'
+            'div.article-item',
+            'div.article'
         ]
         
         for selector in selectors:
             for article in soup.select(selector):
-                title = article.select_one('h3 a, h2 a, a.title')
+                title = article.select_one('h3 a, h2 a, a.title, a.headline')
                 if title:
                     title_text = title.text.strip()
                     link = title.get('href', '')
@@ -165,12 +168,13 @@ def get_articles_energy_voice():
         selectors = [
             'article.post',
             'div.article-item',
-            'div.post-item'
+            'div.post-item',
+            'div.article'
         ]
         
         for selector in selectors:
             for article in soup.select(selector):
-                title = article.select_one('h2 a, h3 a, a.title')
+                title = article.select_one('h2 a, h3 a, a.title, a.headline')
                 if title:
                     title_text = title.text.strip()
                     link = title.get('href', '')
@@ -203,12 +207,13 @@ def get_articles_upstream():
         selectors = [
             'div.article-item',
             'article.article-item',
-            'div.news-item'
+            'div.news-item',
+            'div.article'
         ]
         
         for selector in selectors:
             for article in soup.select(selector):
-                title = article.select_one('h3 a, h2 a, a.title')
+                title = article.select_one('h3 a, h2 a, a.title, a.headline')
                 if title:
                     title_text = title.text.strip()
                     link = title.get('href', '')
@@ -241,12 +246,13 @@ def get_articles_offshore_energy():
         selectors = [
             'article.post',
             'div.post-item',
-            'div.article-item'
+            'div.article-item',
+            'div.article'
         ]
         
         for selector in selectors:
             for article in soup.select(selector):
-                title = article.select_one('h2 a, h3 a, a.title')
+                title = article.select_one('h2 a, h3 a, a.title, a.headline')
                 if title:
                     title_text = title.text.strip()
                     link = title.get('href', '')
@@ -264,6 +270,20 @@ def get_articles_offshore_energy():
         logger.error(f"Error fetching Offshore Energy: {str(e)}")
         return []
 
+def test_source(source_func):
+    """Test a single source and return the results"""
+    try:
+        articles = source_func()
+        if articles:
+            logger.info(f"✅ {source_func.__name__} succeeded with {len(articles)} articles")
+            return True, len(articles)
+        else:
+            logger.warning(f"⚠️ {source_func.__name__} returned no articles")
+            return False, 0
+    except Exception as e:
+        logger.error(f"❌ {source_func.__name__} failed: {str(e)}")
+        return False, 0
+
 def fetch_all_articles():
     all_articles = []
     
@@ -277,17 +297,20 @@ def fetch_all_articles():
         get_articles_offshore_energy
     ]
     
+    # Test each source first
+    logger.info("Testing all sources...")
     for source_func in sources:
-        try:
-            articles = source_func()
-            if articles:  # Only add if we got articles
-                all_articles.extend(articles)
-                logger.info(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
-            # Add a small delay between requests to be respectful
-            time.sleep(random.uniform(2, 4))
-        except Exception as e:
-            logger.error(f"Error in source {source_func.__name__}: {str(e)}")
-            continue
+        success, count = test_source(source_func)
+        if success:
+            try:
+                articles = source_func()
+                if articles:
+                    all_articles.extend(articles)
+                    logger.info(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
+                time.sleep(random.uniform(2, 4))
+            except Exception as e:
+                logger.error(f"Error in source {source_func.__name__}: {str(e)}")
+                continue
     
     logger.info(f"Total articles fetched: {len(all_articles)}")
     # Sort by source and limit to most recent

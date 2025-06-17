@@ -3,14 +3,25 @@ from sentence_transformers import SentenceTransformer
 from sklearn.cluster import DBSCAN
 from transformers import pipeline
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from news_scraper import fetch_all_articles
 from textblob import TextBlob
 import logging
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import sys
+from io import StringIO
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Create a string buffer to capture logs
+log_buffer = StringIO()
+handler = logging.StreamHandler(log_buffer)
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 # --- Setup ---
 st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")

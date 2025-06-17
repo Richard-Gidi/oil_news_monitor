@@ -72,6 +72,22 @@ def filter_articles_by_keywords(articles, keywords):
             filtered_articles.append(article)
     return filtered_articles
 
+def summarize_articles(articles):
+    """Summarize all articles with a focus on USD and oil market impact."""
+    if not articles:
+        return "No articles to summarize."
+    # Combine all titles and sources
+    combined_text = ". ".join([f"{a['title']}" for a in articles])
+    # Add a prompt for TextBlob to focus on USD and oil market
+    prompt = ("Summarize the following news headlines with a focus on their potential impact on the USD and the oil market: "
+              f"{combined_text}")
+    blob = TextBlob(prompt)
+    # Use the first 2 sentences as a summary (TextBlob is not a true summarizer, but this gives a short result)
+    summary = " ".join(str(s) for s in blob.sentences[:2])
+    if not summary.strip():
+        summary = "Not enough information to summarize."
+    return summary
+
 def main():
     st.title("Oil News Monitor")
     
@@ -155,6 +171,12 @@ def main():
                             st.markdown(f"Sentiment: :{sentiment_color}[{sentiment:.2f}]")
                             
                             st.markdown("---")
+
+                    # --- SUMMARY SECTION ---
+                    st.markdown("### 📝 Summary: Impact on USD and Oil Market")
+                    summary = summarize_articles(filtered_articles)
+                    st.info(summary)
+                    # --- END SUMMARY SECTION ---
         except Exception as e:
             st.error(f"Error processing news: {str(e)}")
             logger.error(f"Error in main news processing: {str(e)}")

@@ -236,33 +236,6 @@ def get_articles_bloomberg():
         logger.error(f"Error fetching Bloomberg: {str(e)}")
         return []
 
-def get_articles_offshore_energy():
-    """Fetch articles from Offshore-Energy.biz using RSS feed"""
-    try:
-        url = "https://www.offshore-energy.biz/feed/"
-        logger.info(f"Starting to fetch from Offshore Energy RSS: {url}")
-        
-        feed = feedparser.parse(url)
-        articles = []
-        
-        for entry in feed.entries[:10]:
-            title = entry.title
-            link = entry.link
-            
-            if title and link:
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'source': 'Offshore Energy'
-                })
-                logger.info(f"Found article: {title}")
-        
-        logger.info(f"Total articles found from Offshore Energy: {len(articles)}")
-        return articles
-    except Exception as e:
-        logger.error(f"Error fetching Offshore Energy: {str(e)}")
-        return []
-
 def test_source(source_func):
     """Test a single source and return the results"""
     try:
@@ -286,8 +259,7 @@ def fetch_all_articles():
     sources = [
         get_articles_oilprice,
         get_articles_reuters,
-        get_articles_bloomberg,
-        get_articles_offshore_energy
+        get_articles_bloomberg
     ]
     
     # Test each source first

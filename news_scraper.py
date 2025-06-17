@@ -124,121 +124,74 @@ def get_articles_oilprice():
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        # Try multiple selectors for article containers
-        selectors = [
-            'div.categoryArticle',
-            'article.categoryArticle',
-            'div.article-list-item',
-            'div.article-item',
-            'div.article',
-            'div.article-content',
-            'div.article-wrapper'
-        ]
+        # Find all article containers
+        article_containers = soup.find_all('div', class_='categoryArticle')
+        logger.info(f"Found {len(article_containers)} article containers")
         
-        for selector in selectors:
-            logger.info(f"Trying selector: {selector}")
-            elements = soup.select(selector)
-            logger.info(f"Found {len(elements)} elements with selector {selector}")
-            
-            for article in elements:
-                try:
-                    # Try multiple title selectors
-                    title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
-                    for title_selector in title_selectors:
-                        title = article.select_one(title_selector)
-                        if title:
-                            title_text = title.text.strip()
-                            if not title_text:
-                                continue
-                                
-                            # Get link from title or parent
-                            link = title.get('href', '')
-                            if not link and title.parent:
-                                link = title.parent.get('href', '')
-                                
-                            if not link.startswith('http'):
-                                link = urljoin('https://oilprice.com', link)
-                            
-                            # Get date - try multiple selectors
-                            date_selectors = [
-                                'span.article_byline',
-                                'span.date',
-                                'time',
-                                'span.timestamp',
-                                'div.date',
-                                'div.timestamp',
-                                'div.article_byline',
-                                'div.article-meta',
-                                'div.article-meta-info'
-                            ]
-                            
-                            # Log the raw HTML of the article for debugging
-                            logger.info(f"Raw article HTML: {article.prettify()}")
-                            
-                            date_str = None
-                            for date_selector in date_selectors:
-                                date_elem = article.select_one(date_selector)
-                                if date_elem:
-                                    # Log the raw HTML of the date element
-                                    logger.info(f"Found date element with selector {date_selector}: {date_elem.prettify()}")
-                                    
-                                    # Get the full text which includes the date
-                                    full_text = date_elem.get_text(strip=True)
-                                    logger.info(f"Full text from date element: {full_text}")
-                                    
-                                    # Look for the date pattern in the text
-                                    if 'By' in full_text:
-                                        # Extract the date part after "By"
-                                        date_parts = full_text.split('By')[1].strip()
-                                        logger.info(f"Text after 'By': {date_parts}")
-                                        
-                                        if '-' in date_parts:
-                                            date_parts = date_parts.split('-')[1].strip()
-                                            logger.info(f"Text after '-': {date_parts}")
-                                        
-                                        # Try to extract just the date part
-                                        date_match = re.search(r'([A-Za-z]+ \d+, \d{4})', date_parts)
-                                        if date_match:
-                                            date_str = date_match.group(1)
-                                            logger.info(f"Extracted date string: {date_str}")
-                                            break
-                                        else:
-                                            date_str = date_parts
-                                            logger.info(f"Using full date parts: {date_str}")
-                                            break
-                            
-                            if date_str:
-                                # Try to parse the date
-                                try:
-                                    # First try the full format with time
-                                    date = datetime.strptime(date_str, '%b %d, %Y')
-                                    logger.info(f"Successfully parsed date: {date}")
-                                except ValueError:
-                                    try:
-                                        # Try without time
-                                        date = datetime.strptime(date_str, '%B %d, %Y')
-                                        logger.info(f"Successfully parsed date with full month: {date}")
-                                    except ValueError:
-                                        logger.error(f"Failed to parse date string: {date_str}")
-                                        date = None
-                            else:
-                                date = None
-                                logger.error("No date string found")
-                            
-                            articles.append({
-                                'title': title_text,
-                                'url': link,
-                                'source': 'OilPrice',
-                                'date': date
-                            })
-                            logger.info(f"Added article: {title_text} with date: {date}")
-                            break
-                except Exception as e:
-                    logger.error(f"Error parsing OilPrice article: {str(e)}")
+        for article in article_containers:
+            try:
+                # Get title and link
+                title_elem = article.find('h2')
+                if not title_elem:
                     continue
+                    
+                title_text = title_elem.text.strip()
+                if not title_text:
+                    continue
+                
+                # Get link
+                link = title_elem.find('a')['href'] if title_elem.find('a') else None
+                if not link:
+                    continue
+                    
+                if not link.startswith('http'):
+                    link = urljoin('https://oilprice.com', link)
+                
+                # Get date from the article page
+                article_response = safe_request(link)
+                if article_response:
+                    article_soup = BeautifulSoup(article_response.text, 'html.parser')
+                    
+                    # Try to find the date in the article page
+                    date_elem = article_soup.find('div', class_='article_byline')
+                    date_str = None
+                    
+                    if date_elem:
+                        full_text = date_elem.text.strip()
+                        logger.info(f"Found article byline: {full_text}")
+                        
+                        # Extract date using regex
+                        date_match = re.search(r'By.*?-\s*(.*?)(?:\s*$|\s*\|)', full_text)
+                        if date_match:
+                            date_str = date_match.group(1).strip()
+                            logger.info(f"Extracted date string: {date_str}")
+                
+                # Parse the date
+                date = None
+                if date_str:
+                    try:
+                        # Try to parse the date
+                        date = datetime.strptime(date_str, '%b %d, %Y')
+                        logger.info(f"Successfully parsed date: {date}")
+                    except ValueError as e:
+                        logger.error(f"Failed to parse date '{date_str}': {str(e)}")
+                        date = None
+                
+                articles.append({
+                    'title': title_text,
+                    'url': link,
+                    'source': 'OilPrice',
+                    'date': date
+                })
+                logger.info(f"Added article: {title_text} with date: {date}")
+                
+            except Exception as e:
+                logger.error(f"Error parsing article: {str(e)}")
+                continue
         
         logger.info(f"Total articles found from OilPrice: {len(articles)}")
         return articles
+        
     except Exception as e:
         logger.error(f"Error fetching from OilPrice: {str(e)}")
         return []
@@ -466,4 +419,21 @@ def fetch_all_articles():
     
     logger.info(f"Total articles fetched across all sources: {len(all_articles)}")
     return all_articles
+
+def test_oilprice_scraper():
+    """Test function to debug OilPrice scraping"""
+    articles = get_articles_oilprice()
+    print("\n=== OilPrice Scraper Test Results ===")
+    print(f"Total articles found: {len(articles)}")
+    
+    for i, article in enumerate(articles, 1):
+        print(f"\nArticle {i}:")
+        print(f"Title: {article['title']}")
+        print(f"URL: {article['url']}")
+        print(f"Date: {article['date']}")
+        print("-" * 50)
+
+if __name__ == "__main__":
+    # Run the test function
+    test_oilprice_scraper()
 

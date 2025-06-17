@@ -17,6 +17,19 @@ st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")
 st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
+# Debug section at the top
+st.sidebar.header("🔧 Debug Information")
+if st.sidebar.button("Test News Fetch"):
+    with st.spinner("Testing news fetch..."):
+        articles = fetch_all_articles()
+        st.sidebar.write(f"Total articles fetched: {len(articles)}")
+        if articles:
+            st.sidebar.write("Sample articles:")
+            for article in articles[:3]:
+                st.sidebar.write(f"- {article['title']} ({article['source']})")
+        else:
+            st.sidebar.error("No articles were fetched")
+
 # --- Hugging Face Pipelines ---
 @st.cache_resource
 def load_models():
@@ -180,6 +193,15 @@ with st.spinner("Fetching and analyzing news..."):
         logger.info("Starting news fetch")
         articles = fetch_all_articles()
         logger.info(f"Fetched {len(articles)} total articles")
+        
+        # Show raw articles in debug section
+        with st.expander("🔍 Debug: Raw Articles"):
+            if articles:
+                st.write(f"Total articles fetched: {len(articles)}")
+                for article in articles:
+                    st.write(f"- [{article['title']}]({article['url']}) ({article['source']})")
+            else:
+                st.error("No articles were fetched")
         
         if not articles:
             st.error("No articles were fetched from any source. Please check your internet connection and try again.")

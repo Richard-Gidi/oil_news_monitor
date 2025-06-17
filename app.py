@@ -131,19 +131,13 @@ def summarize_articles(articles):
 
 def main():
     st.title("Oil News Monitor")
-    
-    # Sidebar
     st.sidebar.title("Settings")
-    
-    # Keyword filter in sidebar
     st.sidebar.subheader("Keyword Filter")
     keywords_input = st.sidebar.text_input(
         "Enter keywords (comma-separated):",
         "oil, OPEC, crude, price"
     )
     keywords = [k.strip() for k in keywords_input.split(',') if k.strip()]
-    
-    # Debug section in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("Debug")
     if st.sidebar.button("Test News Fetch", key="test_news_fetch"):
@@ -156,14 +150,56 @@ def main():
                     st.sidebar.write(f"- {article['title']} ({article['source']})")
         except Exception as e:
             st.sidebar.error(f"Error testing news fetch: {str(e)}")
-    
-    # Main content
-    col1, col2 = st.columns([2, 1])
+
+    # Main content with three columns
+    col1, col2, col3 = st.columns([1, 2, 1])
     
     with col1:
+        st.subheader("Market Overview")
+        st.markdown("""
+        This section provides a quick overview of the oil market:
+        - Latest price trends
+        - Market sentiment
+        - Key developments
+        """)
+    
+    with col2:
+        st.subheader("Latest News")
+        try:
+            articles = fetch_all_articles()
+            if not articles:
+                st.warning("No articles found. Please check the debug section for more information.")
+            else:
+                filtered_articles = filter_articles_by_keywords(articles, keywords)
+                with st.expander("Debug: Raw Articles", expanded=False):
+                    st.write(f"Total articles fetched: {len(articles)}")
+                    st.write(f"Articles matching keywords: {len(filtered_articles)}")
+                    for article in articles:
+                        st.write(f"- {article['title']} ({article['source']})")
+                # --- SUMMARY SECTION ---
+                st.markdown("### 📝 Summary: Impact on USD and Oil Market")
+                summary = summarize_articles(filtered_articles)
+                st.info(summary)
+                # --- END SUMMARY SECTION ---
+                if not filtered_articles:
+                    st.info(f"No articles found matching the keywords: {', '.join(keywords)}")
+                else:
+                    for i, article in enumerate(filtered_articles):
+                        with st.container():
+                            st.markdown(f"### {article['title']}")
+                            st.markdown(f"Source: {article['source']}")
+                            st.markdown(f"[Read more]({article['url']})")
+                            sentiment = analyze_sentiment(article['title'])
+                            sentiment_color = 'green' if sentiment > 0.6 else 'red' if sentiment < 0.4 else 'gray'
+                            st.markdown(f"Sentiment: :{sentiment_color}[{sentiment:.2f}]")
+                            st.markdown("---")
+        except Exception as e:
+            st.error(f"Error processing news: {str(e)}")
+            logger.error(f"Error in main news processing: {str(e)}")
+    
+    with col3:
         st.subheader("Oil Price Trends")
         df = get_oil_price_data()
-        
         if not df.empty:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df['WTI'], name='WTI', line=dict(color='blue')))
@@ -177,50 +213,6 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Failed to fetch oil price data")
-    
-    with col2:
-        st.subheader("Latest News")
-        try:
-            articles = fetch_all_articles()
-            
-            if not articles:
-                st.warning("No articles found. Please check the debug section for more information.")
-            else:
-                # Filter articles by keywords
-                filtered_articles = filter_articles_by_keywords(articles, keywords)
-                
-                # Debug expander
-                with st.expander("Debug: Raw Articles", expanded=False):
-                    st.write(f"Total articles fetched: {len(articles)}")
-                    st.write(f"Articles matching keywords: {len(filtered_articles)}")
-                    for article in articles:
-                        st.write(f"- {article['title']} ({article['source']})")
-                
-                # Process filtered articles
-                if not filtered_articles:
-                    st.info(f"No articles found matching the keywords: {', '.join(keywords)}")
-                else:
-                    for i, article in enumerate(filtered_articles):
-                        with st.container():
-                            st.markdown(f"### {article['title']}")
-                            st.markdown(f"Source: {article['source']}")
-                            st.markdown(f"[Read more]({article['url']})")
-                            
-                            # Analyze sentiment
-                            sentiment = analyze_sentiment(article['title'])
-                            sentiment_color = 'green' if sentiment > 0.6 else 'red' if sentiment < 0.4 else 'gray'
-                            st.markdown(f"Sentiment: :{sentiment_color}[{sentiment:.2f}]")
-                            
-                            st.markdown("---")
-
-                    # --- SUMMARY SECTION ---
-                    st.markdown("### 📝 Summary: Impact on USD and Oil Market")
-                    summary = summarize_articles(filtered_articles)
-                    st.info(summary)
-                    # --- END SUMMARY SECTION ---
-        except Exception as e:
-            st.error(f"Error processing news: {str(e)}")
-            logger.error(f"Error in main news processing: {str(e)}")
 
 if __name__ == "__main__":
     main()

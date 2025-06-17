@@ -31,30 +31,10 @@ def safe_request(url, timeout=30, max_retries=3):
     for attempt in range(max_retries):
         try:
             logger.info(f"Attempting request to {url} (attempt {attempt + 1}/{max_retries})")
-            
-            # Try direct request first
-            try:
-                response = requests.get(url, headers=headers, timeout=timeout)
-                response.raise_for_status()
-                logger.info(f"Successfully fetched {url} directly")
-                return response
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"Direct request failed: {str(e)}")
-                
-                # If direct request fails, try with a proxy
-                try:
-                    proxies = {
-                        'http': 'http://proxy.example.com:8080',  # Replace with actual proxy
-                        'https': 'http://proxy.example.com:8080'
-                    }
-                    response = requests.get(url, headers=headers, proxies=proxies, timeout=timeout)
-                    response.raise_for_status()
-                    logger.info(f"Successfully fetched {url} via proxy")
-                    return response
-                except requests.exceptions.RequestException as e:
-                    logger.warning(f"Proxy request failed: {str(e)}")
-                    raise
-                
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            logger.info(f"Successfully fetched {url}")
+            return response
         except requests.exceptions.RequestException as e:
             logger.warning(f"Attempt {attempt + 1} failed for {url}: {str(e)}")
             if attempt == max_retries - 1:
@@ -73,11 +53,6 @@ def get_articles_oilprice():
         if not res:
             logger.error("Failed to get response from OilPrice")
             return []
-            
-        # Save the HTML for debugging
-        with open('oilprice_debug.html', 'w', encoding='utf-8') as f:
-            f.write(res.text)
-        logger.info("Saved OilPrice HTML for debugging")
             
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
@@ -141,11 +116,6 @@ def get_articles_rigzone():
             logger.error("Failed to get response from Rigzone")
             return []
             
-        # Save the HTML for debugging
-        with open('rigzone_debug.html', 'w', encoding='utf-8') as f:
-            f.write(res.text)
-        logger.info("Saved Rigzone HTML for debugging")
-            
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
@@ -156,7 +126,8 @@ def get_articles_rigzone():
             'div.article-item',
             'div.article',
             'div.article-content',
-            'div.article-wrapper'
+            'div.article-wrapper',
+            'div.article-list'
         ]
         
         for selector in selectors:
@@ -207,11 +178,6 @@ def get_articles_energy_voice():
             logger.error("Failed to get response from Energy Voice")
             return []
             
-        # Save the HTML for debugging
-        with open('energyvoice_debug.html', 'w', encoding='utf-8') as f:
-            f.write(res.text)
-        logger.info("Saved Energy Voice HTML for debugging")
-            
         soup = BeautifulSoup(res.text, 'html.parser')
         articles = []
         
@@ -222,7 +188,8 @@ def get_articles_energy_voice():
             'div.post-item',
             'div.article',
             'div.article-content',
-            'div.article-wrapper'
+            'div.article-wrapper',
+            'div.post-list'
         ]
         
         for selector in selectors:
@@ -262,6 +229,130 @@ def get_articles_energy_voice():
         logger.error(f"Error fetching Energy Voice: {str(e)}")
         return []
 
+def get_articles_offshore_energy():
+    """Fetch articles from Offshore-Energy.biz"""
+    try:
+        url = "https://www.offshore-energy.biz/news/"
+        logger.info(f"Starting to fetch from Offshore Energy: {url}")
+        
+        res = safe_request(url)
+        if not res:
+            logger.error("Failed to get response from Offshore Energy")
+            return []
+            
+        soup = BeautifulSoup(res.text, 'html.parser')
+        articles = []
+        
+        # Try multiple selectors
+        selectors = [
+            'article.post',
+            'div.post-item',
+            'div.article-item',
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper',
+            'div.post-list'
+        ]
+        
+        for selector in selectors:
+            logger.info(f"Trying selector: {selector}")
+            elements = soup.select(selector)
+            logger.info(f"Found {len(elements)} elements with selector {selector}")
+            
+            for article in elements:
+                # Try multiple title selectors
+                title_selectors = ['h2 a', 'h3 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.offshore-energy.biz', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Offshore Energy'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
+        
+        logger.info(f"Total articles found from Offshore Energy: {len(articles)}")
+        return articles[:10] if articles else []
+    except Exception as e:
+        logger.error(f"Error fetching Offshore Energy: {str(e)}")
+        return []
+
+def get_articles_upstream():
+    """Fetch articles from Upstream"""
+    try:
+        url = "https://www.upstreamonline.com/latest-news"
+        logger.info(f"Starting to fetch from Upstream: {url}")
+        
+        res = safe_request(url)
+        if not res:
+            logger.error("Failed to get response from Upstream")
+            return []
+            
+        soup = BeautifulSoup(res.text, 'html.parser')
+        articles = []
+        
+        # Try multiple selectors
+        selectors = [
+            'div.article-item',
+            'article.article-item',
+            'div.news-item',
+            'div.article',
+            'div.article-content',
+            'div.article-wrapper',
+            'div.news-list'
+        ]
+        
+        for selector in selectors:
+            logger.info(f"Trying selector: {selector}")
+            elements = soup.select(selector)
+            logger.info(f"Found {len(elements)} elements with selector {selector}")
+            
+            for article in elements:
+                # Try multiple title selectors
+                title_selectors = ['h3 a', 'h2 a', 'a.title', 'a.headline', 'h2', 'h3', 'a']
+                for title_selector in title_selectors:
+                    title = article.select_one(title_selector)
+                    if title:
+                        title_text = title.text.strip()
+                        if not title_text:
+                            continue
+                            
+                        # Get link from title or parent
+                        link = title.get('href', '')
+                        if not link and title.parent:
+                            link = title.parent.get('href', '')
+                            
+                        if not link.startswith('http'):
+                            link = urljoin('https://www.upstreamonline.com', link)
+                            
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': 'Upstream'
+                        })
+                        logger.info(f"Found article: {title_text}")
+                        break
+        
+        logger.info(f"Total articles found from Upstream: {len(articles)}")
+        return articles[:10] if articles else []
+    except Exception as e:
+        logger.error(f"Error fetching Upstream: {str(e)}")
+        return []
+
 def test_source(source_func):
     """Test a single source and return the results"""
     try:
@@ -285,7 +376,9 @@ def fetch_all_articles():
     sources = [
         get_articles_oilprice,
         get_articles_rigzone,
-        get_articles_energy_voice
+        get_articles_energy_voice,
+        get_articles_offshore_energy,
+        get_articles_upstream
     ]
     
     # Test each source first

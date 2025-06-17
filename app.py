@@ -30,8 +30,10 @@ handler.setLevel(logging.INFO)
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(handler)
 
+# Set page config - must be the first Streamlit command
+st.set_page_config(page_title="Oil News Monitor", layout="wide")
+
 # --- Setup ---
-st.set_page_config(page_title="📰 Oil Market News Tracker", layout="wide")
 st.title("🛢️ Oil Market News Tracker")
 st.caption(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
@@ -351,8 +353,6 @@ def get_oil_price_data():
         return pd.DataFrame()
 
 def main():
-    st.set_page_config(page_title="Oil News Monitor", layout="wide")
-    
     st.title("Oil News Monitor")
     
     # Sidebar

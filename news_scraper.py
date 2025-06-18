@@ -419,70 +419,101 @@ def get_articles_google_news():
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9'
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         }
         
         response = safe_request(url, headers=headers)
         if not response:
+            logger.error("Failed to get response from Google News")
             return []
             
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = []
         
-        for article in soup.find_all('article'):
-            try:
-                link_elem = article.find('a', href=True)
-                if not link_elem:
-                    continue
-                    
-                link = link_elem['href']
-                if link.startswith('./'):
-                    link = 'https://news.google.com' + link[1:]
-                
-                title_elem = article.find('h3') or article.find('h4')
-                if not title_elem:
-                    continue
-                    
-                title_text = title_elem.text.strip()
-                if not title_text:
-                    continue
-                
-                source_elem = article.find('div', {'class': ['article-meta', 'time']})
-                source_text = source_elem.text.strip() if source_elem else ''
-                
-                source_parts = source_text.split('·')
-                source_name = source_parts[0].strip() if source_parts else 'Unknown Source'
-                time_text = source_parts[1].strip() if len(source_parts) > 1 else ''
-                
-                date = None
-                if time_text:
-                    try:
-                        if 'hour' in time_text.lower():
-                            hours = int(''.join(filter(str.isdigit, time_text)))
-                            date = datetime.now() - timedelta(hours=hours)
-                        elif 'day' in time_text.lower():
-                            days = int(''.join(filter(str.isdigit, time_text)))
-                            date = datetime.now() - timedelta(days=days)
-                        elif 'week' in time_text.lower():
-                            weeks = int(''.join(filter(str.isdigit, time_text)))
-                            date = datetime.now() - timedelta(weeks=weeks)
-                        elif 'month' in time_text.lower():
-                            months = int(''.join(filter(str.isdigit, time_text)))
-                            date = datetime.now() - timedelta(days=months*30)
-                    except Exception as e:
-                        logger.error(f"Error parsing date '{time_text}': {str(e)}")
-                
-                articles.append({
-                    'title': title_text,
-                    'url': link,
-                    'source': source_name,
-                    'date': date
-                })
-                
-            except Exception as e:
-                logger.error(f"Error parsing Google News article: {str(e)}")
-                continue
+        # Try different article selectors
+        article_selectors = [
+            'article',
+            'div[jscontroller="d0DtYd"]',
+            'div[jsname="TeSSVd"]',
+            'div[jsname="HxYVYd"]'
+        ]
         
+        for selector in article_selectors:
+            article_elements = soup.select(selector)
+            logger.info(f"Found {len(article_elements)} articles with selector: {selector}")
+            
+            for article in article_elements:
+                try:
+                    # Try different title selectors
+                    title_elem = (
+                        article.select_one('h3 a') or 
+                        article.select_one('h4 a') or 
+                        article.select_one('a[role="heading"]') or
+                        article.select_one('a[data-n-tid]')
+                    )
+                    
+                    if not title_elem:
+                        continue
+                        
+                    title_text = title_elem.text.strip()
+                    if not title_text:
+                        continue
+                    
+                    # Get the link
+                    link = title_elem.get('href', '')
+                    if link.startswith('./'):
+                        link = 'https://news.google.com' + link[1:]
+                    
+                    # Try different source selectors
+                    source_elem = (
+                        article.select_one('div[class*="article-meta"]') or
+                        article.select_one('div[class*="time"]') or
+                        article.select_one('div[class*="source"]') or
+                        article.select_one('a[class*="source"]')
+                    )
+                    
+                    source_text = source_elem.text.strip() if source_elem else ''
+                    source_parts = source_text.split('·')
+                    source_name = source_parts[0].strip() if source_parts else 'Unknown Source'
+                    time_text = source_parts[1].strip() if len(source_parts) > 1 else ''
+                    
+                    # Parse the date
+                    date = None
+                    if time_text:
+                        try:
+                            if 'hour' in time_text.lower():
+                                hours = int(''.join(filter(str.isdigit, time_text)))
+                                date = datetime.now() - timedelta(hours=hours)
+                            elif 'day' in time_text.lower():
+                                days = int(''.join(filter(str.isdigit, time_text)))
+                                date = datetime.now() - timedelta(days=days)
+                            elif 'week' in time_text.lower():
+                                weeks = int(''.join(filter(str.isdigit, time_text)))
+                                date = datetime.now() - timedelta(weeks=weeks)
+                            elif 'month' in time_text.lower():
+                                months = int(''.join(filter(str.isdigit, time_text)))
+                                date = datetime.now() - timedelta(days=months*30)
+                        except Exception as e:
+                            logger.error(f"Error parsing date '{time_text}': {str(e)}")
+                    
+                    # Only add if we have a valid title and link
+                    if title_text and link:
+                        articles.append({
+                            'title': title_text,
+                            'url': link,
+                            'source': source_name,
+                            'date': date
+                        })
+                        logger.info(f"Found article: {title_text} from {source_name}")
+                
+                except Exception as e:
+                    logger.error(f"Error parsing Google News article: {str(e)}")
+                    continue
+        
+        logger.info(f"Total articles found from Google News: {len(articles)}")
         return articles
         
     except Exception as e:

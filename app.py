@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import yfinance as yf
 import numpy as np
-from news_scraper import fetch_all_articles
+from news_scraper import get_all_articles
 import logging
 import time
 import random
@@ -324,7 +324,7 @@ def main():
     st.sidebar.subheader("Debug")
     if st.sidebar.button("Test News Fetch", key="test_news_fetch"):
         try:
-            articles = fetch_all_articles()
+            articles = get_all_articles()
             st.sidebar.write(f"Total articles fetched: {len(articles)}")
             if articles:
                 st.sidebar.write("Sample articles:")
@@ -349,7 +349,7 @@ def main():
     with col2:
         st.subheader("Latest News")
         try:
-            articles = fetch_all_articles()
+            articles = get_all_articles()
             if not articles:
                 st.warning("No articles found. Please check the debug section for more information.")
             else:

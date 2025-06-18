@@ -15,15 +15,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def safe_request(url, max_retries=3):
+def safe_request(url, max_retries=3, headers=None):
     """Make a request with retries and proper headers"""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
+    if headers is None:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
     
     for attempt in range(max_retries):
         try:
@@ -291,7 +292,26 @@ def get_articles_bloomberg():
         url = "https://www.bloomberg.com/markets/commodities"
         logger.info(f"Starting to fetch from Bloomberg: {url}")
         
-        response = safe_request(url)
+        # Bloomberg-specific headers
+        bloomberg_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'Referer': 'https://www.bloomberg.com/',
+            'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"'
+        }
+        
+        response = safe_request(url, headers=bloomberg_headers)
         if not response:
             logger.error("Failed to get response from Bloomberg")
             return []
@@ -307,7 +327,9 @@ def get_articles_bloomberg():
             'article.story',
             'div[data-type="article"]',
             'article[data-type="article"]',
-            'div.headline-list__item'
+            'div.headline-list__item',
+            'div.story-package-module__story',
+            'div.story-list-story__info'
         ]
         
         for selector in selectors:
@@ -321,8 +343,10 @@ def get_articles_bloomberg():
                     title_selectors = [
                         'h3 a', 'h2 a', 'a.headline', 'a.title',
                         'h3', 'h2', 'a[data-type="headline"]',
-                        'div.headline__text'
+                        'div.headline__text',
+                        'a.story-list-story__headline'
                     ]
+                    
                     for title_selector in title_selectors:
                         title = article.select_one(title_selector)
                         if title:
@@ -344,7 +368,9 @@ def get_articles_bloomberg():
                                 'span.timestamp',
                                 'time',
                                 'span.date',
-                                'div.timestamp'
+                                'div.timestamp',
+                                'div.story-list-story__timestamp',
+                                'div.story-package-module__timestamp'
                             ]
                             
                             date_str = None
@@ -354,6 +380,15 @@ def get_articles_bloomberg():
                                     date_str = date_elem.get_text(strip=True)
                                     if date_str:
                                         break
+                            
+                            # If no date found in the listing, try to get it from the article page
+                            if not date_str:
+                                article_response = safe_request(link, headers=bloomberg_headers)
+                                if article_response:
+                                    article_soup = BeautifulSoup(article_response.text, 'html.parser')
+                                    date_elem = article_soup.select_one('time.timestamp, span.timestamp, time, span.date')
+                                    if date_elem:
+                                        date_str = date_elem.get_text(strip=True)
                             
                             date = parse_date(date_str, 'Bloomberg')
                             

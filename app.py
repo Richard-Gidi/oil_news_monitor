@@ -376,13 +376,30 @@ def main():
                         logger.error(f"Error processing article date: {str(e)}")
                         filtered_articles.append(article)
                 
+                # --- SUMMARY SECTION ---
+                st.markdown("### 📝 Market Analysis Summary")
+                summary = summarize_articles(filtered_articles)
+                st.info(summary)
+                # --- END SUMMARY SECTION ---
+                
                 # Display articles with source and date
                 for article in filtered_articles:
                     with st.container():
                         st.markdown(f"### [{article['title']}]({article['url']})")
+                        
+                        # Source and date
                         source = article.get('source', 'Unknown Source')
                         date = format_date(article.get('date'))
                         st.markdown(f"**Source:** {source} | **Date:** {date}")
+                        
+                        # Economic Impact Analysis
+                        mechanism, impact, intensity = analyze_economic_impact(article['title'])
+                        sentiment_color = get_sentiment_color(impact, intensity)
+                        
+                        st.markdown("#### Economic Analysis")
+                        st.markdown(f"**Transmission Mechanism:** {mechanism}")
+                        st.markdown(f"**Market Impact:** :{sentiment_color}[{impact} - {intensity}]")
+                        
                         st.markdown("---")
                 
                 # Debug information

@@ -289,58 +289,59 @@ def analyze_economic_impact(text):
         return "Error in analysis", "Neutral", "Neutral"
 
 def format_date(date):
-    """Format date consistently"""
-    if not date:
+    """Format date for display"""
+    if date is None:
         return "Date not available"
-    try:
-        if isinstance(date, str):
+    if isinstance(date, str):
+        try:
+            date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
             return date
-        return date.strftime("%B %d, %Y")
-    except:
-        return "Date not available"
+    return date.strftime("%B %d, %Y %H:%M")
 
 def main():
-    st.title("Oil News Monitor")
+    st.title("Oil Market News Monitor")
+    
+    # Sidebar
+    st.sidebar.header("Settings")
     
     # Date range selector
-    st.sidebar.title("Settings")
-    st.sidebar.subheader("Date Range")
-    today = datetime.now()
-    default_start = today - timedelta(days=7)
-    start_date = st.sidebar.date_input("Start Date", default_start)
-    end_date = st.sidebar.date_input("End Date", today)
-    
-    if start_date > end_date:
-        st.sidebar.error("Start date must be before end date")
-        return
-
-    st.sidebar.subheader("Keyword Filter")
-    keywords_input = st.sidebar.text_input(
-        "Enter keywords (comma-separated):",
-        "oil, OPEC, crude, price"
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    date_range = st.sidebar.date_input(
+        "Select Date Range",
+        value=(start_date, end_date),
+        max_value=end_date
     )
-    keywords = [k.strip() for k in keywords_input.split(',') if k.strip()]
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Debug")
-    if st.sidebar.button("Test News Fetch", key="test_news_fetch"):
-        try:
-            articles = get_all_articles()
-            st.sidebar.write(f"Total articles fetched: {len(articles)}")
-            if articles:
-                st.sidebar.write("Sample articles:")
-                for article in articles[:3]:
-                    date_str = format_date(article.get('date'))
-                    st.sidebar.write(f"- {article['title']} ({article['source']}) - {date_str}")
-        except Exception as e:
-            st.sidebar.error(f"Error testing news fetch: {str(e)}")
-
-    # Main content with three columns
+    
+    if len(date_range) == 2:
+        start_date, end_date = date_range
+        if start_date > end_date:
+            st.sidebar.error("Start date must be before end date")
+            return
+    else:
+        st.sidebar.error("Please select both start and end dates")
+        return
+    
+    # Debug section
+    with st.sidebar.expander("Debug Information"):
+        if st.button("Test News Fetch", key="test_news_fetch"):
+            try:
+                articles = get_all_articles()
+                st.write(f"Total articles fetched: {len(articles)}")
+                if articles:
+                    st.write("Sample article:")
+                    st.write(articles[0])
+            except Exception as e:
+                st.error(f"Error fetching articles: {str(e)}")
+    
+    # Main content
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col1:
         st.subheader("Market Overview")
-        st.markdown("""
-        This section provides a quick overview of the oil market:
+        st.write("""
+        This section provides a comprehensive view of the oil market, including:
         - Latest price trends
         - Market sentiment
         - Key developments
@@ -356,56 +357,42 @@ def main():
                 # Filter articles by date
                 filtered_articles = []
                 for article in articles:
-                    article_date = article.get('date')
-                    if article_date:
-                        try:
-                            if isinstance(article_date, str):
-                                article_date = datetime.strptime(article_date, "%B %d, %Y")
-                            if start_date <= article_date.date() <= end_date:
-                                filtered_articles.append(article)
-                        except:
-                            # If date parsing fails, include the article anyway
+                    try:
+                        article_date = article.get('date')
+                        if article_date is None:
                             filtered_articles.append(article)
-                    else:
-                        # If no date is available, include the article
+                            continue
+                            
+                        if isinstance(article_date, str):
+                            try:
+                                article_date = datetime.strptime(article_date, "%Y-%m-%d %H:%M:%S")
+                            except ValueError:
+                                filtered_articles.append(article)
+                                continue
+                                
+                        if start_date <= article_date.date() <= end_date:
+                            filtered_articles.append(article)
+                    except Exception as e:
+                        logger.error(f"Error processing article date: {str(e)}")
                         filtered_articles.append(article)
                 
-                # Filter by keywords
-                filtered_articles = filter_articles_by_keywords(filtered_articles, keywords)
+                # Display articles with source and date
+                for article in filtered_articles:
+                    with st.container():
+                        st.markdown(f"### [{article['title']}]({article['url']})")
+                        source = article.get('source', 'Unknown Source')
+                        date = format_date(article.get('date'))
+                        st.markdown(f"**Source:** {source} | **Date:** {date}")
+                        st.markdown("---")
                 
-                with st.expander("Debug: Raw Articles", expanded=False):
+                # Debug information
+                with st.expander("Debug Information"):
                     st.write(f"Total articles fetched: {len(articles)}")
-                    st.write(f"Articles in date range: {len(filtered_articles)}")
-                    st.write(f"Articles matching keywords: {len(filtered_articles)}")
-                    for article in articles:
-                        date_str = format_date(article.get('date'))
-                        st.write(f"- {article['title']} ({article['source']}) - {date_str}")
-                
-                # --- SUMMARY SECTION ---
-                st.markdown("### 📝 Market Analysis Summary")
-                summary = summarize_articles(filtered_articles)
-                st.info(summary)
-                # --- END SUMMARY SECTION ---
-                
-                if not filtered_articles:
-                    st.info(f"No articles found matching the criteria for the period {start_date} to {end_date}")
-                else:
-                    for i, article in enumerate(filtered_articles):
-                        with st.container():
-                            st.markdown(f"### {article['title']}")
-                            date_str = format_date(article.get('date'))
-                            st.markdown(f"**{article['source']}** • {date_str}")
-                            st.markdown(f"[Read more]({article['url']})")
-                            
-                            # Economic Impact Analysis
-                            mechanism, impact, intensity = analyze_economic_impact(article['title'])
-                            sentiment_color = get_sentiment_color(impact, intensity)
-                            
-                            st.markdown("#### Economic Analysis")
-                            st.markdown(f"**Transmission Mechanism:** {mechanism}")
-                            st.markdown(f"**Market Impact:** :{sentiment_color}[{impact} - {intensity}]")
-                            
-                            st.markdown("---")
+                    st.write(f"Articles within date range: {len(filtered_articles)}")
+                    st.write("Sample article data:")
+                    if articles:
+                        st.write(articles[0])
+        
         except Exception as e:
             st.error(f"Error processing news: {str(e)}")
             logger.error(f"Error in main news processing: {str(e)}")

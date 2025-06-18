@@ -410,49 +410,107 @@ def get_articles_bloomberg():
         logger.error(f"Error fetching from Bloomberg: {str(e)}")
         return []
 
-def test_source(source_func):
-    """Test a single source and return the results"""
+def get_articles_google_news():
+    """Get articles from Google News search for oil and energy"""
     try:
-        logger.info(f"Testing source: {source_func.__name__}")
-        articles = source_func()
-        if articles:
-            logger.info(f"✅ {source_func.__name__} succeeded with {len(articles)} articles")
-            return True, len(articles)
-        else:
-            logger.warning(f"⚠️ {source_func.__name__} returned no articles")
-            return False, 0
+        url = "https://news.google.com/search?q=oil+energy+market+crude+price&hl=en&gl=US&ceid=US:en"
+        logger.info(f"Starting to fetch from Google News: {url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
+        }
+        
+        response = safe_request(url, headers=headers)
+        if not response:
+            return []
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        articles = []
+        
+        for article in soup.find_all('article'):
+            try:
+                link_elem = article.find('a', href=True)
+                if not link_elem:
+                    continue
+                    
+                link = link_elem['href']
+                if link.startswith('./'):
+                    link = 'https://news.google.com' + link[1:]
+                
+                title_elem = article.find('h3') or article.find('h4')
+                if not title_elem:
+                    continue
+                    
+                title_text = title_elem.text.strip()
+                if not title_text:
+                    continue
+                
+                source_elem = article.find('div', {'class': ['article-meta', 'time']})
+                source_text = source_elem.text.strip() if source_elem else ''
+                
+                source_parts = source_text.split('·')
+                source_name = source_parts[0].strip() if source_parts else 'Unknown Source'
+                time_text = source_parts[1].strip() if len(source_parts) > 1 else ''
+                
+                date = None
+                if time_text:
+                    try:
+                        if 'hour' in time_text.lower():
+                            hours = int(''.join(filter(str.isdigit, time_text)))
+                            date = datetime.now() - timedelta(hours=hours)
+                        elif 'day' in time_text.lower():
+                            days = int(''.join(filter(str.isdigit, time_text)))
+                            date = datetime.now() - timedelta(days=days)
+                        elif 'week' in time_text.lower():
+                            weeks = int(''.join(filter(str.isdigit, time_text)))
+                            date = datetime.now() - timedelta(weeks=weeks)
+                        elif 'month' in time_text.lower():
+                            months = int(''.join(filter(str.isdigit, time_text)))
+                            date = datetime.now() - timedelta(days=months*30)
+                    except Exception as e:
+                        logger.error(f"Error parsing date '{time_text}': {str(e)}")
+                
+                articles.append({
+                    'title': title_text,
+                    'url': link,
+                    'source': source_name,
+                    'date': date
+                })
+                
+            except Exception as e:
+                logger.error(f"Error parsing Google News article: {str(e)}")
+                continue
+        
+        return articles
+        
     except Exception as e:
-        logger.error(f"❌ {source_func.__name__} failed: {str(e)}")
-        return False, 0
+        logger.error(f"Error fetching from Google News: {str(e)}")
+        return []
 
-def fetch_all_articles():
-    """Fetch articles from all sources"""
+def get_all_articles():
+    """Get articles from all sources"""
     all_articles = []
     
-    # Fetch from each source
-    sources = [
-        get_articles_oilprice,
-        get_articles_reuters,
-        get_articles_bloomberg
-    ]
+    # Get articles from Google News
+    google_articles = get_articles_google_news()
+    all_articles.extend(google_articles)
     
-    for source_func in sources:
-        try:
-            logger.info(f"Starting to fetch from {source_func.__name__}")
-            articles = source_func()
-            if articles:
-                all_articles.extend(articles)
-                logger.info(f"Successfully fetched {len(articles)} articles from {source_func.__name__}")
-            else:
-                logger.warning(f"No articles found from {source_func.__name__}")
-            time.sleep(2)  # Delay between requests
-        except Exception as e:
-            logger.error(f"Error fetching from {source_func.__name__}: {str(e)}")
-            continue
+    # Get articles from OilPrice
+    oilprice_articles = get_articles_oilprice()
+    all_articles.extend(oilprice_articles)
     
-    # Sort articles by date if available, otherwise by source
-    all_articles.sort(key=lambda x: (x.get('date', datetime.min), x['source']), reverse=True)
+    # Get articles from Reuters
+    reuters_articles = get_articles_reuters()
+    all_articles.extend(reuters_articles)
     
-    logger.info(f"Total articles fetched across all sources: {len(all_articles)}")
+    # Get articles from Bloomberg
+    bloomberg_articles = get_articles_bloomberg()
+    all_articles.extend(bloomberg_articles)
+    
+    # Sort articles by date (most recent first)
+    all_articles.sort(key=lambda x: x['date'] if x['date'] else datetime.min, reverse=True)
+    
     return all_articles
 

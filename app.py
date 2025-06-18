@@ -387,11 +387,17 @@ def main():
                     with st.container():
                         st.markdown(f"### [{article['title']}]({article['url']})")
                         
+                        # Debug logging for article data
+                        logger.info(f"Article data: {article}")
+                        
                         # Source and date
                         source = article.get('source', 'Unknown Source')
-                        if source == 'Unknown Source':
-                            # Try to extract source from URL
-                            url = article.get('url', '')
+                        url = article.get('url', '')
+                        logger.info(f"Source from article: {source}")
+                        logger.info(f"URL: {url}")
+                        
+                        # Try to determine source from URL if needed
+                        if source == 'Unknown Source' or not source:
                             if 'oilprice.com' in url:
                                 source = 'OilPrice'
                             elif 'reuters.com' in url:
@@ -400,6 +406,7 @@ def main():
                                 source = 'Bloomberg'
                             elif 'news.google.com' in url:
                                 source = 'Google News'
+                            logger.info(f"Source determined from URL: {source}")
                         
                         date = format_date(article.get('date'))
                         st.markdown(f"**Source:** {source} | **Date:** {date}")

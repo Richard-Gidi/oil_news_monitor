@@ -389,6 +389,18 @@ def main():
                         
                         # Source and date
                         source = article.get('source', 'Unknown Source')
+                        if source == 'Unknown Source':
+                            # Try to extract source from URL
+                            url = article.get('url', '')
+                            if 'oilprice.com' in url:
+                                source = 'OilPrice'
+                            elif 'reuters.com' in url:
+                                source = 'Reuters'
+                            elif 'bloomberg.com' in url:
+                                source = 'Bloomberg'
+                            elif 'news.google.com' in url:
+                                source = 'Google News'
+                        
                         date = format_date(article.get('date'))
                         st.markdown(f"**Source:** {source} | **Date:** {date}")
                         

@@ -11,3 +11,7 @@ sentence-transformers==2.2.2
 transformers==4.44.2
 torch>=2.1.0
 scikit-learn==1.4.2
+
+feedparser==6.0.10
+nltk==3.8.1
+textblob==0.17.1
